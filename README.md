@@ -4,7 +4,8 @@ A single-page website that combines one month of **School 4 vehicle data** with
 **troop-lift bus movements** into one clean, printable schedule.
 
 Two source workbooks in, one School 4 schedule out — grouped **by date** or
-**by company**, and exportable as a formatted Excel workbook.
+**by company**, fully editable in a **Live sheet**, and exportable as a
+formatted Excel workbook. Glass-morphic UI; everything runs offline.
 
 ```
                            ┌────────────────┐      ┌────────────────┐
@@ -18,7 +19,11 @@ Two source workbooks in, one School 4 schedule out — grouped **by date** or
                           combine · filter to School 4 · flag & note
                                                ▼
                           ┌──────────────────────────────────────┐
-                          │  On-screen: By Date | By Company      │
+                          │  Live sheet — edit any cell, rows     │
+                          │  add / duplicate / delete, auto-saved │
+                          │  locally                              │
+                          │            ▼ reflected instantly in   │
+                          │  Schedule: By Date | By Company       │
                           │  Export: .xlsx (2 formatted sheets    │
                           │           + a "Data notes" audit sheet)│
                           │  Print: page-break per day/company    │
@@ -37,7 +42,36 @@ python3 -m http.server 8000
 # open http://localhost:8000
 ```
 
-Options on the left rail:
+Two tabs share one authoritative dataset:
+
+- **Schedule** — the formatted views (stats bar, company chips, by-date /
+  by-company grouping, print & export).
+- **Live sheet** — an editable spreadsheet of the combined movements.
+
+## Live sheet
+
+Every cell is click-to-edit. `Enter` commits and moves down, `Tab`/`Shift+Tab`
+move sideways, `Esc` cancels. Row tools appear on hover (⧉ duplicate, ✕ delete
+with a two-step confirm), and *＋ Add movement* appends a manual row (badge
+`ADD`). Invalid values are rejected inline with a reason (e.g. dates accept
+`YYYY-MM-DD` or `DD/MM/YYYY`; times `0545` or `07:05`; companies are the
+detected ordinals or `SCHWIDE`).
+
+Editing a **date** shifts the end date too, so multi-day movements keep their
+span (`+3d` is recalculated).
+
+**Storage** — changes auto-save to `localStorage` under
+`tcrs:v2:<month>-<year>` and are restored the next time the same month is
+combined (the save pill shows the restore time). Everything stays on your
+device; nothing syncs. **Reset edits** restores the freshly parsed data
+(snapshot kept at parse time).
+
+The Schedule tab and the `.xlsx` export are generated from the live sheet's
+current state — manual and edited rows are marked in the export's Data notes
+sheet.
+
+Options on the left rail (also respected by the live sheet, e.g. company
+filters hide rows there too):
 
 | Option | What it does |
 | --- | --- |
@@ -81,14 +115,22 @@ Handled automatically — and reported on the **Data notes** export sheet:
 
 | Path | Purpose |
 | --- | --- |
-| `index.html`, `styles.css`, `app.js` | The site (UI + Excel export) |
+| `index.html`, `styles.css`, `app.js` | The site (UI, tabs, Excel export, persistence) |
+| `sheet.js` | Editable live-sheet grid (no third-party grid library) |
 | `parser.js` | Pure parsing/merge logic — no DOM, reusable |
 | `vendor/exceljs.min.js` | Vendored ExcelJS 4.4.0 (offline, no CDN) |
+| `dist/` | Deployment copy — site files only, no samples or tests |
 | `samples/` | The two reference workbooks (copied from the repo root) |
 | `tests/test.html` | 28 parser assertions (reference values) |
-| `tests/smoke.html` | End-to-end UI + export read-back smoke test |
+| `tests/smoke.html` | UI + live-sheet + export read-back smoke test |
 | `tests/screens/` | Rendered screenshots |
 | `reference_parse.py` | Python mirror of the parser; source of the expected values |
+
+## URL hashes
+
+`#auto` loads the bundled samples and shows the by-date schedule; `#auto-coy`
+switches to the by-company view; `#auto-grid` opens the Live sheet tab.
+Useful as demo bookmarks after combining.
 
 ## Tests
 
@@ -104,5 +146,8 @@ CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 
 - Vehicle naming keeps the source casing (`5-Ton GS`); counts render as `4× BUSES` / `LUV ×1`.
 - Export keeps times as **text** so leading zeros (`0545`) survive Excel.
+- Sticky section headers use `backdrop-filter`; headless-screenshot captures may
+  show ghost rows inside them (a known compositor artifact), real browsers render them correctly.
 - Ideas: attach-number summary per day, route preset dictionary, drag-and-drop of
-  both files at once, month selector when workbooks contain several sheets.
+  both files at once, month selector when workbooks contain several sheets,
+  CSV/Google-Sheets paste-in for the live sheet.

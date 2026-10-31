@@ -205,6 +205,7 @@
         timeEnd: nextDay ? (eTime || '2359') : eTime,
         nextDay: nextDay,
         dayDiff: dayDiff,
+        eDate: eY || sDateY,
         from: from, to: to,
         qty: (typeof qty === 'number' && !isNaN(qty)) ? Math.round(qty) : null,
         vehicleType: vehType,
