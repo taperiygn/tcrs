@@ -50,18 +50,29 @@ Two tabs share one authoritative dataset:
 
 ## Live sheet
 
-Every cell is click-to-edit. `Enter` commits and moves down, `Tab`/`Shift+Tab`
-move sideways, `Esc` cancels. Row tools appear on hover (⧉ duplicate, ✕ delete
-with a two-step confirm), and *＋ Add movement* appends a manual row (badge
-`ADD`). Invalid values are rejected inline with a reason (e.g. dates accept
-`YYYY-MM-DD` or `DD/MM/YYYY`; times `0545` or `07:05`; companies are the
-detected ordinals or `SCHWIDE`).
+The Live sheet has two sub-tabs that mirror the source workbooks:
 
-Editing a **date** shifts the end date too, so multi-day movements keep their
-span (`+3d` is recalculated).
+- **ICRF · vehicles** — the sheet in its original column template (SCH / company /
+  activity, veh type, qty, req'd TO, start/end date & time, reporting,
+  destination, officer, phone, unit). Rows the parser skipped (headers, notes)
+  appear hatched; type a valid `SCH 4 - <6TH COY> - <ACTIVITY>` in their first
+  cell to bring them into the schedule.
+- **Troop lift · lines** — the original one-column list, grouped under each date,
+  covering every unit. Each line is edited as raw text
+  (`0545 MTL - RHC 4 BUSES (7TH BOOK IN)`) and re-parsed on commit; School 4
+  companies show as chips, unrecognised lines are flagged and fixable in place.
+
+Every cell is click-to-edit. `Enter` commits (and moves down in the ICRF grid),
+`Tab`/`Shift+Tab` move sideways, `Esc` cancels. Row tools appear on hover
+(⧉ duplicate, ✕ delete with a two-step confirm); *＋ Add row* / *＋ Add line*
+append new ones. Invalid values are rejected inline with a reason (dates
+`DD/MM/YYYY`, times `07:05` or `0705`).
+
+Editing an ICRF **start date** shifts the end date too, so multi-day movements
+keep their span (`+3d` is recalculated).
 
 **Storage** — changes auto-save to `localStorage` under
-`tcrs:v2:<month>-<year>` and are restored the next time the same month is
+`tcrs:v3:<month>-<year>` and are restored the next time the same month is
 combined (the save pill shows the restore time). Everything stays on your
 device; nothing syncs. **Reset edits** restores the freshly parsed data
 (snapshot kept at parse time).
@@ -129,7 +140,7 @@ Handled automatically — and reported on the **Data notes** export sheet:
 ## URL hashes
 
 `#auto` loads the bundled samples and shows the by-date schedule; `#auto-coy`
-switches to the by-company view; `#auto-grid` opens the Live sheet tab.
+switches to the by-company view; `#auto-grid` opens the Live sheet (ICRF) and `#auto-tl` its Troop lift tab.
 Useful as demo bookmarks after combining.
 
 ## Tests

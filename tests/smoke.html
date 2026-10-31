@@ -1,13 +1,14 @@
 <!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>UI smoke</title>
+<style>.toast,.bgwash{display:none}body{background:#fff;margin:0}</style>
 <script src="../vendor/exceljs.min.js"></script>
 <script src="../parser.js"></script>
 </head><body>
 <pre id="smoke-out">starting…</pre>
 <script>
-/* UI smoke test: reuses index.html's real DOM + app.js in this page, then
- - verifies the redesigned tabs, stats, schedule views
- - makes a LIVE SHEET edit and checks it flows into the schedule view + export */
+/* UI smoke: loads the real app.js against index.html's DOM and exercises
+   the redesigned LIVE SHEET (ICRF template grid + Troop-lift line list),
+   the schedule views, persistence and the styled export. */
 (async function () {
   var out = [], failures = 0;
   function ok(name, cond, extra) {
@@ -15,25 +16,18 @@
     if (!cond) failures++;
   }
   function log() { document.getElementById('smoke-out').textContent = out.join('\n'); }
-  function text(els) {
-    return Array.prototype.map.call(els, function (t) { return t.textContent; });
-  }
+  function txt(el) { return el ? el.textContent : ''; }
 
   try {
     var html = await fetch('../index.html').then(function (r) { return r.text(); });
     var doc = new DOMParser().parseFromString(html, 'text/html');
-    var styles = await fetch('../styles.css').then(function (r) { return r.text(); });
-    var st = document.createElement('style'); st.textContent = styles; document.head.appendChild(st);
     document.body.appendChild(doc.querySelector('header'));
     document.body.appendChild(doc.querySelector('main'));
     document.body.appendChild(doc.querySelector('.toast'));
-    var bg = document.createElement('div'); bg.className = 'bgwash'; document.body.appendChild(bg);
 
-    var appSrc = await fetch('../app.js').then(function (r) { return r.text(); });
-    eval(appSrc);
-    var sheetSrc = await fetch('../sheet.js').then(function (r) { return r.text(); });
-    eval.call({} ,sheetSrc);   // defines window.TCRSSheet
-    var A = window.__tcrs;
+    eval(await fetch('../app.js').then(function (r) { return r.text(); }));
+    eval(await fetch('../sheet.js').then(function (r) { return r.text(); }));
+    A = window.__tcrs;
 
     /* ---------- load samples ---------- */
     var [a, b] = await Promise.all([
@@ -45,71 +39,134 @@
     A.state.icrfWb = wbA; A.state.icrfName = 'ICRF.xlsx';
     A.state.tlWb = wbB; A.state.tlName = 'troop lift.xlsx';
     A.maybeCombine();
+    localStorage.clear();
 
     ok('model built', !!A.state.model, 'no model');
     ok('stats populated', !!document.querySelector('#statsbar .stat .v'), 'empty');
-    ok('month banner title', document.getElementById('mb-title').textContent.indexOf('NOVEMBER 2026') > -1,
-      document.getElementById('mb-title').textContent);
+    ok('month banner title', txt(document.getElementById('mb-title')).indexOf('NOVEMBER 2026') > -1,
+      txt(document.getElementById('mb-title')));
     ok('6 company chips', document.querySelectorAll('#coy-chips .chip').length === 6,
       document.querySelectorAll('#coy-chips .chip').length);
-    var dateGroups = document.querySelectorAll('#content .group');
-    ok('by-date groups rendered', dateGroups.length >= 20, dateGroups.length);
+    ok('by-date groups rendered', document.querySelectorAll('#content .group').length >= 20,
+      document.querySelectorAll('#content .group').length);
     ok('281 rows in schedule', A.filteredEntries().length === 281, A.filteredEntries().length);
     ok('empty-state hidden after combine', document.getElementById('empty-state').hidden === true);
 
-    /* ---------- tabs ---------- */
+    /* ---------- live sheet opens with two source tabs ---------- */
     A.setTab('grid');
-    ok('body switches to grid mode', document.body.classList.contains('tab-grid'));
-    ok('grid mounted with rows', document.querySelectorAll('#sheet-container tbody tr').length >= 260,
-      document.querySelectorAll('#sheet-container tbody tr').length);
-    A.setTab('schedule');
-    ok('back to schedule', document.getElementById('panel-schedule').style.display !== 'none');
+    A.setSrc('icrf');
+    ok('ICRF subtab on by default', document.getElementById('btn-src-icrf').classList.contains('on'));
+    var icrfRows = document.querySelectorAll('#icrf-container tbody tr');
+    ok('ICRF grid has 91 rows (86 entries + 5 skipped)', icrfRows.length === 91, icrfRows.length);
+    ok('ICRF rows show template text in the first cell',
+      Array.prototype.some.call(document.querySelectorAll('#icrf-container td.c-colA'),
+        function (td) { return txt(td).indexOf('SCH 4 - ') === 0; }),
+      txt(document.querySelector('#icrf-container td.c-colA')));
+    var skipRow = document.querySelector('#icrf-container tr.row-skip');
+    ok('skipped rows rendered only with an editable first cell', !!skipRow);
 
-    /* ---------- LIVE SHEET EDIT ---------- */
-    var target = A.filteredEntries()[1];           // any entry
-    var before = target.activity;
-    var res = A.commitEntry(target.id, 'activity', 'EDITED XYZ');
-    ok('commit ok', res && res.ok, JSON.stringify(res));
-    var shown = text(document.querySelectorAll('#content table.mov .act')).indexOf('EDITED XYZ') > -1;
-    ok('schedule tab reflects the edit', shown, 'not found in day view');
-    var row = document.querySelector('#sheet-container tr[data-id="' + target.id + '"]');
-    ok('live sheet rendered', true);
-    var stored = JSON.parse(localStorage.getItem(Object.keys(localStorage).filter(function (k) { return k.indexOf('tcrs:v2:') === 0; })[0] || '{}'));
-    ok('edits auto-saved', stored && stored.entries.some(function (e) { return e.id === target.id && e.activity === 'EDITED XYZ'; }), 'missing');
-    ok('edited flag set', !!findE(stored.entries, target.id).edited, 'no flag');
-    restore = null;
+    /* ---------- ICRF edits ---------- */
+    var i7 = A.state.entries.filter(function (e) { return e.id === 'i7'; })[0];
+    ok('i7 exists', !!i7);
+    var r1 = A.commitICRF('i7', 'from', 'RHC DEPOT');
+    ok('ICRF free-text cell commits', r1.ok, JSON.stringify(r1));
+    ok('from updated', i7.from === 'RHC DEPOT', i7.from);
 
-    // reject invalid date
-    var bad = A.commitEntry(target.id, 'date', '31/13/2026');
-    ok('invalid date rejected', !bad.ok, JSON.stringify(bad));
+    var r2 = A.commitICRF('i7', 'colA', 'SCH 4 - 6TH / 7TH COY - ICRF EDIT XYZ');
+    ok('colA re-parses coy+activity', r2.ok && i7.activity === 'ICRF EDIT XYZ' &&
+      i7.coys.join(',') === '6TH,7TH', JSON.stringify({ r: r2, a: i7.activity, c: i7.coys }));
+    var bad = A.commitICRF('i7', 'colA', 'GARBAGE CELL');
+    ok('bad colA rejected with a reason', !bad.ok, JSON.stringify(bad));
 
-    // time normalize
-    var t2 = A.commitEntry(target.id, 'timeStart', '7:05');
-    ok('time normalized to 0705', findE(A.state.entries, target.id).timeStart === '0705', findE(A.state.entries, target.id).timeStart);
+    var i8 = A.state.entries.filter(function (e) { return e.id === 'i8'; })[0];
+    ok('i8 span info', !!i8 && i8.dayDiff === 3, i8 && i8.dayDiff);
+    var r3 = A.commitICRF('i8', 'sdate', '03/11/2026');
+    ok('date edit shifts multi-day span', r3.ok && i8.date === '2026-11-03' &&
+      i8.eDate === '2026-11-06' && i8.dayDiff === 3,
+      JSON.stringify(i8 && [i8.date, i8.eDate, i8.dayDiff]));
 
-    // add + delete
+    var t = A.commitICRF('i7', 'stime', '07:05');
+    ok('time normalized', i7.timeStart === '0705', i7.timeStart);
+
+    /* skip-row rescue */
+    var skipBefore = A.state.skipped.length;
+    var rs = A.commitICRF('s0', 'colA', 'SCH 4 - 6TH COY - RESCUED ROW');
+    ok('skipped row rescued into schedule', rs.ok && A.state.skipped.length === skipBefore - 1,
+      JSON.stringify({ r: rs, n: A.state.skipped.length }));
+    var rescued = A.state.entries.filter(function (e) { return e.activity === 'RESCUED ROW'; })[0];
+    ok('rescued row registered', !!rescued && rescued.coys.join(',') === '6TH', rescued && rescued.id);
+
+    ok('carried edits auto-saved to storage v3', (function () {
+      var k = Object.keys(localStorage).filter(function (k0) { return k0.indexOf('tcrs:v3:') === 0; })[0];
+      var d = k && JSON.parse(localStorage.getItem(k) || '{}');
+      return d && d.v === 3 && Array.isArray(d.tlLines) && d.tlLines.length > 400;
+    })(), Object.keys(localStorage).join(','));
+
+    /* ---------- scheduling still reflects ICRF edits ---------- */
+    var shown = Array.prototype.some.call(document.querySelectorAll('#content .act'),
+      function (n) { return n.textContent === 'ICRF EDIT XYZ'; });
+    ok('schedule view reflects the ICRF edit', shown, 'not found');
+
+    /* ---------- Troop-lift one-column view ---------- */
+    A.setSrc('tl');
+    var blocks = document.querySelectorAll('#tl-container .tl-block');
+    var days = 0;
+    A.state.tlLines.forEach(function (l) { if (l.kind === 'date') days++; });
+    ok('TL blocks match the sheet dates', blocks.length === days, blocks.length + '/d' + days);
+    ok('TL line text is the raw sheet text',
+      txt(document.querySelector('#tl-container .tl-line .tl-text')).length > 10,
+      txt(document.querySelector('#tl-container .tl-line .tl-text')));
+    ok('schedule lines carry coy chips',
+      document.querySelectorAll('#tl-container .tl-line .coychip').length > 50,
+      document.querySelectorAll('#tl-container .tl-line .coychip').length);
+
+    /* add a line under the first date, commit, verify re-parse → schedule */
+    var firstDate = A.state.tlLines.filter(function (l) { return l.kind === 'date'; })[0];
+    A.addTLLine('b' + firstDate.row);
+    var newLine = A.state.tlLines.filter(function (l) { return l.status === 'new'; })[0];
+    ok('add-line creates a blank line', !!newLine, 'none');
     var n0 = A.state.entries.length;
-    A.addRow();
-    var manual = A.state.entries.filter(function (e) { return e.source === 'MANUAL'; });
-    ok('add row works', A.state.entries.length === n0 + 1 && manual.length === 1, manual.length);
-    A.delRow(manual[0].id);
-    ok('delete works', A.state.entries.length === n0, A.state.entries.length);
+    var rtl = A.commitTL(newLine.id, '0915 MTL - RHC 2 BUSES (7TH TL TEST EDIT)');
+    ok('TL line re-parses into an entry', rtl.ok, JSON.stringify(rtl));
+    var added = A.state.entries.filter(function (e) { return e.activity === 'TL TEST EDIT'; })[0];
+    ok('TL edit lands in schedule entries', !!added && added.timeStart === '0915' &&
+      added.qty === 2 && added.kind === 'bus', added && JSON.stringify(added));
+    shown = Array.prototype.some.call(document.querySelectorAll('#content .act'),
+      function (n) { return n.textContent === 'TL TEST EDIT'; });
+    ok('schedule view reflects the TL line', shown, 'not found');
 
-    // duplicate
-    A.dupRow(target.id);
-    var dups = A.state.entries.filter(function (e) { return e.activity === 'EDITED XYZ'; });
-    ok('duplicate works', dups.length === 2, dups.length);
-    A.state.entries.splice(A.state.entries.indexOf(dups[1]), 1);
-    A.refresh();
+    var badTL = A.commitTL(newLine.id, 'not a movement line');
+    ok('bad TL text rejected', !badTL.ok, JSON.stringify(badTL));
+    A.delTLLine(newLine.id);
+    ok('TL line delete removes its entry', A.state.entries.length === n0, A.state.entries.length);
+
+    var rdup = A.dupTLLine(findFirstParsedLineId());
+    ok('dup TL line', A.state.tlLines.filter(function (l) { return l.dup; }).length === 1);
+    A.delTLLine(findFirstParsedLineId());
+
+    function findFirstParsedLineId() {
+      for (var i = 0; i < A.state.tlLines.length; i++) {
+        var l = A.state.tlLines[i];
+        if (l.kind === 'line' && l.status === 'ok') return l.id;
+      }
+      return null;
+    }
+
+    /* ---------- reset edits restores parsed data ---------- */
+    A.resetEdits();
+    ok('reset restores skipped rows', A.state.skipped.length === 5, A.state.skipped.length);
+    ok('reset restores original activity',
+      findEntryW(A, 'i7').activity !== 'ICRF EDIT XYZ', findEntryW(A, 'i7').activity);
+    ok('reset removes manual TL line edits', !A.state.entries.some(function (e) { return e.activity === 'TL TEST EDIT'; }));
 
     /* ---------- POC toggle ---------- */
     A.state.poc = false; A.drawView();
-    var ths = text(document.querySelectorAll('#content thead th'));
+    var ths = Array.prototype.map.call(document.querySelectorAll('#content thead th'), txt);
     ok('POC header absent when toggled off', ths.indexOf('POC / Contact') === -1, ths.join(','));
     A.state.poc = true; A.drawView();
 
     A.state.onlyS4 = false; A.refresh();
-    ok('onlyS4 off shows all TL lines', A.filteredEntries().length > 281, A.filteredEntries().length);
+    ok('onlyS4 off shows all TL entries', A.filteredEntries().length > 281, A.filteredEntries().length);
     A.state.onlyS4 = true; A.refresh();
 
     /* ---------- company view ---------- */
@@ -119,6 +176,7 @@
     A.state.view = 'date'; A.drawView();
 
     /* ---------- export uses edited data ---------- */
+    A.commitICRF('i7', 'from', 'RHC DEPOT');   // one edit again after reset
     URL.createObjectURL = (function (real) {
       return function (blob) { URL.createObjectURL.__blob = blob; return real.call(URL, blob); };
     })(URL.createObjectURL);
@@ -128,21 +186,22 @@
     var names = outWb.worksheets.map(function (w) { return w.name; });
     ok('export sheets = By Date | By Company | Data notes',
       names.join('|') === 'By Date|By Company|Data notes', names.join('|'));
-    var ws1 = outWb.worksheets[0];
     var foundEdit = false;
-    ws1.eachRow(function (row) {
+    outWb.worksheets[0].eachRow(function (row) {
       row.eachCell(function (c) {
-        if (typeof c.value === 'string' && c.value === 'EDITED XYZ') foundEdit = true;
+        if (typeof c.value === 'string' && c.value === 'RHC DEPOT') foundEdit = true;
       });
     });
-    ok('export includes the live-sheet edit', foundEdit, 'EDITED XYZ missing from xlsx');
-    var genNote = ws1.getRow(2).getCell(1).value;
-    ok('export notes mention manual adjustments', /manually adjusted/.test(String(genNote)), String(genNote));
+    ok('export includes the live-sheet edit', foundEdit, 'RHC DEPOT missing from xlsx');
+    ok('export notes mention manual adjustments',
+      /manually adjusted/.test(String(outWb.worksheets[0].getRow(2).getCell(1).value)),
+      String(outWb.worksheets[0].getRow(2).getCell(1).value));
 
-    /* ---------- reset edits restores parsed data ---------- */
-    A.resetEdits();
-    var c = A.filteredEntries().filter(function (e) { return e.id === target.id; })[0];
-    ok('reset restores original activity', c.activity !== 'EDITED XYZ', c.activity);
+    /* ---------- blank panel when nothing is parsed ---------- */
+    A.state.model = null; A.setTab('grid');
+    ok('live sheet shows a blank hint pre-combine',
+      document.getElementById('sheet-panel').classList.contains('blank'));
+    localStorage.clear();
 
   } catch (e) {
     failures++;
@@ -151,6 +210,10 @@
   log();
   document.title = failures ? 'SMOKE FAILED' : 'SMOKE OK';
 
-  function findE(arr, id) { for (var i = 0; i < arr.length; i++) if (arr[i].id === id) return arr[i]; return null; }
+  function findEntryW(A, id) {
+    var x = null;
+    A.state.entries.forEach(function (e) { if (e.id === id) x = e; });
+    return x;
+  }
 })();
 </script></body></html>

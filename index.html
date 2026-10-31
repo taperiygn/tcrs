@@ -208,7 +208,14 @@
 
     <!-- ============================ LIVE SHEET PANEL -->
     <div id="panel-grid" style="display:none">
-      <div class="sheet-panel glass">
+      <div class="sheet-panel glass" id="sheet-panel">
+
+        <div class="sheet-blank" id="sheet-blank">
+          <div class="empty-eyebrow">LIVE SHEET</div>
+          <h2>Nothing to edit yet</h2>
+          <p class="empty-sub">Load the month's <b>ICRF</b> and <b>Troop Lift</b> workbooks on the left —
+            then come back here to edit the source sheets directly.</p>
+        </div>
 
         <div class="sheet-toolbar">
           <div class="sheet-title">
@@ -218,21 +225,34 @@
               <span id="sheet-note" class="sheet-note"></span>
             </div>
           </div>
+          <div class="seg srctabs" role="tablist" aria-label="Source sheets">
+            <button id="btn-src-icrf" class="on">ICRF · vehicles</button>
+            <button id="btn-src-tl">Troop lift · lines</button>
+          </div>
           <div class="sheet-tools">
             <div class="searchwrap glass-inset">
               <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.7.7l.27.28v.79l5 4.99L20.49 19zm-6 0A4.5 4.5 0 1 1 14 9.5 4.5 4.5 0 0 1 9.5 14z"/></svg>
-              <input id="grid-search" type="text" placeholder="Search movements…" spellcheck="false">
+              <input id="grid-search" type="text" placeholder="Search…" spellcheck="false">
             </div>
             <span class="save-pill" id="save-pill"></span>
             <button class="btn glass-btn sm" id="grid-discard" title="Throw away your saved edits and restore the freshly parsed data">Reset edits</button>
           </div>
         </div>
 
-        <div id="sheet-container"></div>
-        <div class="sheet-footnote">
-          <span class="srcbadge icrf">ICRF</span> + <span class="srcbadge tl">TL</span> come from your files;
-          <span class="srcbadge manual">ADD</span> rows and anything with a ✎ were added or changed here.
-          Edits stay on this device and flow into the Schedule tab and the .xlsx export automatically.
+        <div id="icrf-container" class="sheet-host"></div>
+        <div id="tl-container" class="sheet-host" style="display:none"></div>
+
+        <div class="sheet-footnote" id="icrf-foot">
+          This is the ICRF workbook exactly as it was loaded — edit any cell and the
+          change flows into the Schedule tab and the .xlsx export. Editing the first
+          cell must keep <b>SCH 4 - &lt;6TH COY&gt; - &lt;ACTIVITY&gt;</b>; editing a start
+          date shifts the end date so multi-day spans hold.
+        </div>
+        <div class="sheet-footnote" id="tl-foot">
+          The Troop Lift sheet in its original one-line-per-movement format — every
+          unit, exactly as in the workbook. Edit a line as raw text
+          (<b>0545 MTL - RHC 4 BUSES (7TH BOOK IN)</b>) and it re-parses; School 4
+          companies show as chips. Unparsed lines are marked and can be fixed in place.
         </div>
 
       </div>

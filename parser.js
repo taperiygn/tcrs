@@ -84,8 +84,7 @@
     return ymd(dd);
   }
 
-  /* Parse "24/11/26" style (dd/mm/yy). Applies same swap heuristic. */
-  function textDateToYMD(s, targetMonth, fixes, label) {
+  /* Parse "24/11/26" style (dd/mm/yy). Applies same swap heuristic. */  function textDateToYMD(s, targetMonth, fixes, label) {
     var t = norm(s).replace(/^\*+|\*+$/g, '').trim();
     var m = t.match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?/);
     if (!m) return null;
@@ -222,8 +221,54 @@
     return res;
   }
 
+  /* Parse one troop-lift movement line. Exported so edited lines can be
+     re-parsed in the app. Returns {ok:false} or
+     {ok:true, fields:{timeStart,from,to,qty,vehicleType,activity,coys,
+                       coyLabel,flagged,tbc,kind}} */
+  function parseTLLineText(t) {
+    var lm = TL_LINE.exec(t);
+    if (!lm) return { ok: false };
+    var time = lm[1] === 'TBC' ? 'TBC' : lm[1];
+    var route = lm[2];
+    var cnt = lm[3] ? +lm[3] : null;
+    var noun = lm[4].toUpperCase();
+    var paren = norm(lm[5]);
+    paren = paren.replace(/^\*+|\*+$/g, '').trim();
+
+    var tag = paren, act = '';
+    var sp = paren.indexOf(' ');
+    if (sp > -1) { tag = paren.slice(0, sp); act = paren.slice(sp + 1); }
+    var coys = [];
+    var parts = tag.split('/');
+    parts.forEach(function (p) {
+      p = norm(p).toUpperCase();
+      if (ORDINAL.test(p)) coys.push(p);
+    });
+    // route: split at first " - "
+    var from = route, to = '';
+    var sep = route.indexOf(' - ');
+    if (sep > -1) { from = route.slice(0, sep); to = route.slice(sep + 3); }
+    var flagged = /^\*|\*$/.test(t) || (t.length > 2 && t[0] === '*' && t[t.length - 1] === '*');
+
+    return {
+      ok: true,
+      fields: {
+        timeStart: time,
+        from: from, to: to,
+        qty: cnt,
+        vehicleType: noun === 'BUS' ? 'BUSES' : noun,
+        kind: 'bus',
+        coys: coys,
+        coyLabel: coys.join(' / '),
+        activity: act.trim() || '—',
+        flagged: flagged,
+        tbc: time === 'TBC'
+      }
+    };
+  }
+
   function parseTROOPLIFT(worksheet) {
-    var res = { monthWord: null, tlDateMonths: [], entries: [], unmatched: [], coySet: {}, days: {}, tbcDays: {} };
+    var res = { monthWord: null, tlDateMonths: [], entries: [], lines: [], unmatched: [], coySet: {}, days: {}, tbcDays: {} };
     var curDate = null;
     worksheet.eachRow({ includeEmpty: true }, function (row) {
       var r = row.number;
@@ -234,6 +279,7 @@
         curDate = ymd(v);
         res.days[curDate] = 1;
         res.tlDateMonths.push(v.getUTCMonth() + 1);
+        res.lines.push({ row: r, kind: 'date', date: curDate });
         return;
       }
       var t = norm(v);
@@ -243,6 +289,7 @@
       var mm = /^(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[A-Z]*\s*(\d{4})?\s*(TL)?\s*$/i.exec(t);
       if (mm) {
         res.monthWord = MONTH_WORD[mm[1].toUpperCase()];
+        res.lines.push({ row: r, kind: 'title', text: t });
         return;
       }
       // date placeholder row, e.g. "23/11 (*TBC*)"
@@ -253,58 +300,53 @@
         curDate = y + '-' + pad(+dm[2]) + '-' + pad(+dm[1]);
         res.days[curDate] = 1;
         res.tlDateMonths.push(+dm[2]);
-        if (/\*\s*TBC\s*\*|\*TBC\*/.test(t)) res.tbcDays[curDate] = 1;
+        var isTbc = /\*\s*TBC\s*\*|\*TBC\*/.test(t);
+        if (isTbc) res.tbcDays[curDate] = 1;
+        res.lines.push({ row: r, kind: 'date', date: curDate, text: t, tbc: isTbc });
         return;
       }
 
-      var lm = TL_LINE.exec(t);
-      if (!lm) {
+      var lp = parseTLLineText(t);
+      if (!lp.ok) {
         res.unmatched.push({ row: r, text: t });
+        res.lines.push({ row: r, kind: 'line', text: t, status: 'unparsed', date: curDate });
         return;
       }
-      var time = lm[1] === 'TBC' ? 'TBC' : lm[1];
-      var route = lm[2];
-      var cnt = lm[3] ? +lm[3] : null;
-      var noun = lm[4].toUpperCase();
-      var paren = norm(lm[5]);
-      paren = paren.replace(/^\*+|\*+$/g, '').trim();
 
-      var tag = paren, act = '';
-      var sp = paren.indexOf(' ');
-      if (sp > -1) { tag = paren.slice(0, sp); act = paren.slice(sp + 1); }
-      var coys = [];
-      var parts = tag.split('/');
-      parts.forEach(function (p) {
-        p = norm(p).toUpperCase();
-        if (ORDINAL.test(p)) { coys.push(p); res.coySet[p] = 1; }
-      });
-      // route: split at first " - "
-      var from = route, to = '';
-      var sep = route.indexOf(' - ');
-      if (sep > -1) { from = route.slice(0, sep); to = route.slice(sep + 3); }
-      var flagged = /^\*|\*$/.test(t) || (t.length > 2 && t[0] === '*' && t[t.length - 1] === '*');
-
-      res.entries.push({
+      var e = {
         id: 't' + r,
         source: 'TROOPLIFT',
         date: curDate,
-        coys: coys,
-        coyLabel: coys.join(' / '),
-        activity: act.trim() || '—',
-        timeStart: time,
-        timeEnd: '',
-        nextDay: false,
-        from: from, to: to,
-        qty: cnt,
-        vehicleType: noun === 'BUS' ? 'BUSES' : noun,
-        kind: 'bus',
+        activity: lp.fields.activity,
         officer: '', phone: '', unit: '',
-        flagged: flagged,
-        tbc: time === 'TBC',
-        row: r
-      });
+        nextDay: false, dayDiff: 0, eDate: curDate || '',
+        from: '', to: '',
+        flagged: lp.fields.flagged,
+        tbc: lp.fields.tbc,
+        row: r,
+        rawText: t
+      };
+      applyTLFields(e, lp.fields);
+      lp.fields.coys.forEach(function (c) { res.coySet[c] = 1; });
+      res.entries.push(e);
+      res.lines.push({ row: r, kind: 'line', text: t, status: 'ok', date: curDate, entryId: e.id });
     });
     return res;
+  }
+
+  /* merge parsed TL line fields into an entry (kept rawer fields) */
+  function applyTLFields(e, f) {
+    e.timeStart = f.timeStart;
+    e.from = f.from; e.to = f.to;
+    e.qty = f.qty;
+    e.vehicleType = f.vehicleType;
+    e.kind = 'bus';
+    e.coys = f.coys;
+    e.coyLabel = f.coyLabel;
+    e.activity = f.activity;
+    e.flagged = f.flagged;
+    e.tbc = f.tbc;
+    if (f.timeStart === 'TBC') e.tbc = true;
   }
 
   /* ---------------------------------------------------------- merge -- */
@@ -351,6 +393,7 @@
       })(),
       companies: companies,
       entries: entries,
+      tlLines: tl.lines,
       icrfSkipped: icrfRes.skipped,
       icrfFixes: icrfRes.fixes || [],
       tlUnmatched: tl.unmatched,
@@ -418,6 +461,25 @@
     }));
   }
 
+  /* Parse an ICRF "SCH <n> - <COYS> - <ACTIVITY>" cell. Exported for the
+     live sheet's ICRF view and for repairing skipped rows on the fly. */
+  function parseICRFColA(text) {
+    var am = ICRF_ACTIVITY.exec(norm(text));
+    if (!am) return { ok: false, msg: 'expected "SCH 4 - <X COY> - <ACTIVITY>"' };
+    var coypart = am[2].trim().toUpperCase();
+    var coys = [];
+    if (coypart === 'SCHWIDE' || /SCH.*WIDE/.test(coypart)) {
+      coys = ['SCHWIDE'];
+    } else {
+      coypart.split(/\s*\/\s*/).forEach(function (tok) {
+        tok = tok.trim().replace(/\s*COY\.?$/i, '').trim().toUpperCase();
+        if (ORDINAL.test(tok)) coys.push(tok);
+      });
+    }
+    if (!coys.length) return { ok: false, msg: 'no recognised company ordinal' };
+    return { ok: true, coys: coys, activity: am[3].trim() };
+  }
+
   /* export */
   window.TCRS = {
     parseWorkbooks: function (icrfWb, tlWb) {
@@ -436,6 +498,9 @@
     prettyDate: prettyDate,
     dowOf: dowOf,
     fmtDate: fmtDate,
+    parseTLLineText: parseTLLineText,
+    parseICRFColA: parseICRFColA,
+    applyTLFields: applyTLFields,
     sortCoys: sortCoys,
     MONTH_NAME: MONTH_NAME,
     coyRank: coyRank

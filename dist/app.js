@@ -14,13 +14,16 @@
     entries: [],            // AUTHORITATIVE editable copy (may include manual rows)
     pristine: null,         // untouched snapshot from the last parse (for "Reset edits")
     restoredAt: null,       // timestamp when localStorage edits were restored
+    tlLines: [],            // Troop-lift sheet as live lines ({row,kind,date,text,status,entryId})
+    skipped: [],            // ICRF rows behind the template (`s`-prefixed ids in the grid)
     tab: 'schedule',
+    srcTab: 'icrf',
     view: 'date',           // schedule grouping
     coys: {},               // enabled coy set
     schwide: true,
     onlyS4: true,
     poc: true,
-    grid: null
+    icrfGrid: null, tlGrid: null
   };
 
   var COY_COLORS = {
@@ -70,7 +73,7 @@
   }
 
   /* ------------------------------------------------------ persistence -- */
-  var STORE_PREFIX = 'tcrs:v2:';
+  var STORE_PREFIX = 'tcrs:v3:';
   function storeKey() {
     return STORE_PREFIX + state.model.month + '-' + state.model.year;
   }
@@ -78,9 +81,11 @@
     if (!state.model) return;
     try {
       localStorage.setItem(storeKey(), JSON.stringify({
-        v: 2, at: Date.now(),
+        v: 3, at: Date.now(),
         updatedAt: new Date().toISOString(),
-        entries: state.entries
+        entries: state.entries,
+        tlLines: state.tlLines,
+        skipped: state.skipped
       }));
       $('save-pill').classList.remove('unsaved');
       $('save-pill').textContent = 'saved on this device';
@@ -91,7 +96,7 @@
       var raw = localStorage.getItem(storeKey());
       if (!raw) return null;
       var d = JSON.parse(raw);
-      if (d && d.v === 2 && Array.isArray(d.entries) && d.entries.length) {
+      if (d && d.v === 3 && Array.isArray(d.entries) && d.entries.length) {
         return d;
       }
     } catch (e) { }
@@ -106,9 +111,19 @@
   function resetEdits() {
     if (!state.pristine) return;
     discardStore(true);
-    state.entries = T.sortEntries(JSON.parse(JSON.stringify(state.pristine)));
+    state.entries = JSON.parse(JSON.stringify(state.pristine.entries));
+    state.tlLines = JSON.parse(JSON.stringify(state.pristine.tlLines));
+    state.skipped = JSON.parse(JSON.stringify(state.pristine.skipped));
+    normalizeTLLines();
     refreshDerived();
+    rerenderSrc();
     toast('Restored the freshly parsed data.', false);
+  }
+
+  function normalizeTLLines() {
+    state.tlLines.forEach(function (l) {
+      if (l.kind === 'line' && !l.id) l.id = 'l' + l.row;
+    });
   }
 
   /* ------------------------------------------------------ file intake -- */
@@ -211,6 +226,7 @@
 
     if (!model) {
       state.model = null; state.entries = []; state.restoredAt = null;
+      state.tlLines = []; state.skipped = [];
       $('results').hidden = true;
       $('empty-state').hidden = false;
       $('month-banner').hidden = true;
@@ -223,7 +239,6 @@
     }
 
     state.model = model;
-    state.pristine = JSON.parse(JSON.stringify(model.entries));   // untouched snapshot for "Reset edits"
 
     // company defaults
     state.coys = {};
@@ -232,12 +247,26 @@
     // restore saved edits for this month if present
     var saved = loadStore();
     if (saved) {
-      state.entries = T.sortEntries(saved.entries);
+      state.entries = saved.entries;
+      state.tlLines = Array.isArray(saved.tlLines) && saved.tlLines.length
+        ? saved.tlLines : JSON.parse(JSON.stringify(model.tlLines));
+      state.skipped = Array.isArray(saved.skipped)
+        ? saved.skipped : JSON.parse(JSON.stringify(model.icrfSkipped));
       state.restoredAt = saved.updatedAt || null;
     } else {
-      state.entries = T.sortEntries(model.entries);
+      state.entries = model.entries;
+      state.tlLines = JSON.parse(JSON.stringify(model.tlLines));
+      state.skipped = JSON.parse(JSON.stringify(model.icrfSkipped));
       state.restoredAt = null;
     }
+
+    // pristine snapshot ("Reset edits") — plain copy, order preserved as parsed
+    state.pristine = JSON.parse(JSON.stringify({
+      entries: model.entries, tlLines: model.tlLines, skipped: model.icrfSkipped
+    }));
+
+    // line ids (used by the live sheet and manual lines)
+    normalizeTLLines();
 
     renderMonthBanner();
     renderChips();
@@ -247,7 +276,7 @@
     $('empty-state').hidden = true;
     $('btn-export').disabled = false;
     $('btn-print').disabled = false;
-    mountGrid();
+    setSrc(state.srcTab);
 
     var s = statsFor(filteredEntries());
     toast('<b>Combined.</b> ' + s.movements + ' movements over ' + s.days + ' days.' +
@@ -298,133 +327,302 @@
     return null;
   }
 
-  function commitEntry(id, field, raw) {
+  /* ------------------------------------------------------ helpers ----- */
+  function pad2(n) { return (n < 10 ? '0' : '') + n; }
+
+  function dateRoll(ymdStr, delta) {
+    var d = new Date(ymdStr + 'T00:00:00Z');
+    d.setUTCDate(d.getUTCDate() + delta);
+    return d.getUTCFullYear() + '-' + pad2(d.getUTCMonth() + 1) + '-' + pad2(d.getUTCDate());
+  }
+  function registerCoy(c) {
+    if (state.model && c !== 'SCHWIDE' && state.model.companies.indexOf(c) === -1) {
+      state.model.companies.push(c);
+      state.model.companies = T.sortCoys(state.model.companies);
+      state.coys[c] = true;
+      renderChips();
+    }
+  }
+  function applyDateShift(e, nd) {   // move a movement's date, keeping its span
+    var delta = dayDelta(nd, e.date || nd);
+    e.date = nd;
+    if (e.eDate && delta) {
+      try { e.eDate = dateRoll(e.eDate, delta); } catch (err) { e.eDate = nd; }
+    }
+    if (!e.eDate) e.eDate = nd;
+    e.dayDiff = dayDelta(e.eDate, e.date) > 0 ? dayDelta(e.eDate, e.date) : 0;
+    e.nextDay = e.dayDiff > 0;
+  }
+  function markEdited(e) {
+    e.edited = true;
+    saveStore();
+    refreshDerived();
+    rerenderSrc();
+  }
+
+  /* ===================================================== ICRF view ==== */
+  function icrfColA(e) {
+    var part = e.coys[0] === 'SCHWIDE' ? 'SCHWIDE'
+      : (e.coys.length ? e.coys.map(function (c) { return c + ' COY'; }).join(' / ') : '? COY');
+    return 'SCH 4 - ' + part + ' - ' + (e.activity || '');
+  }
+  function numRow(r) {
+    return typeof r === 'number' ? r : (typeof r === 'string' && r !== '' ? +r : 9e6);
+  }
+
+  function icrfRows() {
+    var rows = [];
+    state.entries.forEach(function (e) {
+      if (e.source === 'ICRF' || (e.source === 'MANUAL' && e.via === 'icrf')) {
+        rows.push({
+          id: e.id, source: e.source, _row: numRow(e.row), edited: e.edited, flagged: e.flagged,
+          colA: icrfColA(e),
+          vehicleType: e.vehicleType || '',
+          qty: e.qty == null ? '' : String(e.qty),
+          reqTo: e.reqTo || '',
+          sdate: e.date ? T.fmtDate(e.date) : '',
+          stime: fmtHHMM(e.timeStart || ''),
+          edate: e.eDate ? T.fmtDate(e.eDate) : '',
+          etime: fmtHHMM(e.timeEnd || ''),
+          from: e.from || '', to: e.to || '',
+          officer: e.officer || '', phone: e.phone || '', unit: e.unit || ''
+        });
+      }
+    });
+    state.skipped.forEach(function (s, i) {
+      rows.push({ id: 's' + i, source: 'SKIP', _skip: true, _row: numRow(s.row), colA: s.text, why: s.why });
+    });
+    rows.sort(function (a, b) { return a._row - b._row || a.id.localeCompare(b.id); });
+    return rows;
+  }
+
+  function commitICRF(id, key, raw) {
+    if (id.charAt(0) === 's') return commitSkip(id, key, raw);
     var e = findEntry(id);
     if (!e) return { ok: false, msg: 'row not found' };
-    var ok = { ok: true };
-    switch (field) {
-      case 'date': {
-        var nd = parseDateInput(raw);
-        if (!nd) return { ok: false, msg: 'Use YYYY-MM-DD or DD/MM/YYYY' };
-        var delta = dayDelta(nd, e.date || nd);
-        e.date = nd;
-        if (e.eDate && delta) {
-          try {
-            e.eDate = validYMD(+e.eDate.slice(0, 4), +e.eDate.slice(5, 7),
-              +e.eDate.slice(8, 10) + delta);
-          } catch (err) { e.eDate = nd; }
-        }
-        if (!e.eDate) e.eDate = nd;
-        e.dayDiff = dayDelta(e.eDate, e.date) > 0 ? dayDelta(e.eDate, e.date) : 0;
-        e.nextDay = e.dayDiff > 0;
-        break;
-      }
-      case 'timeStart': {
-        var t = normalizeTime(raw);
-        if (t === null) return { ok: false, msg: 'Use 4-digit time (e.g. 0545) or TBC' };
-        e.timeStart = t;
-        break;
-      }
-      case 'timeEnd': {
-        var t2 = normalizeTime(raw);
-        if (t2 === null) return { ok: false, msg: 'Use 4-digit time (e.g. 1400), or clear' };
-        e.timeEnd = t2;
-        break;
-      }
-      case 'coys': {
-        var toks = raw.split(/[,\/\s]+/).map(function (s) {
-          return s.trim().toUpperCase().replace(/\s*COY\.?$/, '');
-        }).filter(Boolean);
-        var seen = {}, coys = [];
-        toks.forEach(function (tk) {
-          if (tk === 'SCHWIDE') { coys.push('SCHWIDE'); seen.SCHWIDE = 1; return; }
-          if (ORDINAL.test(tk) && !seen[tk]) { coys.push(tk); seen[tk] = 1; }
-        });
-        if (!coys.length) return { ok: false, msg: 'Use company ordinals like 4TH / 7TH (or SCHWIDE)' };
-        e.coys = coys;
-        coys.forEach(function (c) {
-          if (state.model && c !== 'SCHWIDE' && state.model.companies.indexOf(c) === -1) {
-            state.model.companies.push(c);
-            state.model.companies = T.sortCoys(state.model.companies);
-            state.coys[c] = true;
-            renderChips();
-          }
-        });
-        break;
-      }
-      case 'qty': {
-        if (raw === '') e.qty = null;
-        else {
-          var q = parseInt(raw, 10);
-          if (isNaN(q) || q < 0 || q > 99) return { ok: false, msg: '0 – 99' };
-          e.qty = q;
-        }
+    switch (key) {
+      case 'colA': {
+        var p = T.parseICRFColA(raw);
+        if (!p.ok) return { ok: false, msg: 'keep "SCH 4 - <6TH COY> - <ACTIVITY>" — ' + p.msg };
+        e.coys = p.coys; e.coyLabel = p.coys.join(' / '); e.activity = p.activity;
+        p.coys.forEach(registerCoy);
         break;
       }
       case 'vehicleType': {
         e.vehicleType = raw.trim();
-        if (/^(BUSES?|TONNERS?)$/i.test(raw.trim())) e.kind = 'bus';
-        else e.kind = 'veh';
+        e.kind = /^(BUSES?|TONNERS?)$/i.test(raw.trim()) ? 'bus' : 'veh';
         break;
       }
-      case 'activity': e.activity = raw.trim(); break;
+      case 'qty': {
+        if (raw === '') { e.qty = null; break; }
+        var q = parseInt(raw, 10);
+        if (isNaN(q) || q < 0 || q > 99) return { ok: false, msg: '0 – 99, or empty' };
+        e.qty = q;
+        break;
+      }
+      case 'reqTo': e.reqTo = raw.trim(); break;
+      case 'sdate': {
+        var nd = parseDateInput(raw);
+        if (!nd) return { ok: false, msg: 'use DD/MM/YYYY (or YYYY-MM-DD)' };
+        applyDateShift(e, nd);            // keeps multi-day span (+Nd)
+        break;
+      }
+      case 'edate': {
+        var ne = parseDateInput(raw);
+        if (!ne) return { ok: false, msg: 'use DD/MM/YYYY (or YYYY-MM-DD), or empty' };
+        e.eDate = ne;
+        e.dayDiff = dayDelta(ne, e.date) > 0 ? dayDelta(ne, e.date) : 0;
+        e.nextDay = e.dayDiff > 0;
+        break;
+      }
+      case 'stime': {
+        var t = normalizeTime(raw);
+        if (t === null) return { ok: false, msg: 'use HH:MM (e.g. 07:45) or TBC' };
+        e.timeStart = t;
+        break;
+      }
+      case 'etime': {
+        var t2 = normalizeTime(raw);
+        if (t2 === null) return { ok: false, msg: 'use HH:MM (e.g. 14:00), or empty' };
+        e.timeEnd = t2;
+        break;
+      }
       case 'from': e.from = raw.trim(); break;
       case 'to': e.to = raw.trim(); break;
       case 'officer': e.officer = raw.trim(); break;
       case 'phone': e.phone = raw.replace(/\s+/g, ''); break;
+      case 'unit': e.unit = raw.trim(); break;
       default: return { ok: false, msg: 'locked column' };
     }
-    e.edited = true;
-    state.entries = T.sortEntries(state.entries);
-    saveStore();
-    refreshDerived();
-    return ok;
+    markEdited(e);
+    return { ok: true };
   }
 
-  function addRow() {
-    var first = state.entries[0] || null;
-    var today = new Date();
-    var baseDate = (first && first.date) || validYMD(
-      today.getUTCFullYear(), today.getUTCMonth() + 1, today.getUTCDate());
-    var coy = enabledCoys()[0] || '1ST';
-    var today = new Date();
-    var e = {
-      id: 'm' + Date.now(),
-      source: 'MANUAL',
-      date: baseDate,
-      coys: [coy],
-      coyLabel: coy,
-      activity: '',
-      timeStart: '', timeEnd: '', nextDay: false, dayDiff: 0,
-      eDate: baseDate,
-      from: '', to: '',
+  function commitSkip(id, key, raw) {
+    if (key !== 'colA') return { ok: false, msg: 'this row was skipped by the parser — only the first cell is editable' };
+    var idx = +id.slice(1);
+    var s = state.skipped[idx];
+    if (!s) return { ok: false, msg: 'row not found' };
+    var p = T.parseICRFColA(raw);
+    if (!p.ok) return { ok: false, msg: 'keep "SCH 4 - <6TH COY> - <ACTIVITY>" — ' + p.msg };
+    p.coys.forEach(registerCoy);
+    state.entries.push({
+      id: 'i' + s.row, source: 'ICRF',
+      date: '', eDate: '', dayDiff: 0, nextDay: false,
+      coys: p.coys, coyLabel: p.coys.join(' / '), activity: p.activity,
+      timeStart: '', timeEnd: '', from: '', to: '',
       qty: null, vehicleType: '', kind: 'veh',
-      officer: '', phone: '', unit: '',
-      flagged: false, tbc: false,
-      edited: true
-    };
-    state.entries.push(e);
-    state.entries = T.sortEntries(state.entries);
+      officer: '', phone: '', unit: '', reqTo: '',
+      flagged: false, tbc: false, row: s.row, edited: true
+    });
+    state.skipped.splice(idx, 1);
     saveStore();
     refreshDerived();
+    rerenderSrc();
+    toast('Row ' + s.row + ' brought back — <b>set its start date next</b> so it lands in the schedule.', false);
+    return { ok: true };
   }
-  function dupRow(id) {
+
+  function addIcrfRow() {
+    var maxRow = 0;
+    state.entries.forEach(function (e) { if (e.row > maxRow) maxRow = e.row; });
+    var coy = enabledCoys()[0] || '1ST';
+    state.entries.push({
+      id: 'm' + Date.now(), source: 'MANUAL', via: 'icrf',
+      date: '', eDate: '', dayDiff: 0, nextDay: false,
+      coys: [coy], coyLabel: coy, activity: '',
+      timeStart: '', timeEnd: '', from: '', to: '',
+      qty: null, vehicleType: '', kind: 'veh',
+      officer: '', phone: '', unit: '', reqTo: '',
+      flagged: false, tbc: false, row: maxRow + 1, edited: true
+    });
+    saveStore();
+    updateSavePill();
+    rerenderSrc();
+  }
+  function dupIcrf(id) {
     var e = findEntry(id);
     if (!e) return;
     var copy = JSON.parse(JSON.stringify(e));
     copy.id = 'm' + Date.now() + Math.floor(Math.random() * 99);
+    copy.row = e.row + 0.05;               // stays right below the original
     copy.edited = true;
-    state.entries.splice(state.entries.indexOf(e) + 1, 0, copy);
-    state.entries = T.sortEntries(state.entries);
+    if (copy.source === 'ICRF') copy.source = 'MANUAL';
+    copy.via = 'icrf';
+    state.entries.push(copy);
     saveStore();
-    refreshDerived();
+    updateSavePill();
+    rerenderSrc();
   }
-  function delRow(id) {
+  function delIcrf(id) {
+    if (id.charAt(0) === 's') {
+      var idx = +id.slice(1);
+      if (state.skipped[idx]) { state.skipped.splice(idx, 1); saveStore(); updateSavePill(); rerenderSrc(); }
+      return;
+    }
     var e = findEntry(id);
     if (!e) return;
     state.entries.splice(state.entries.indexOf(e), 1);
     saveStore();
     refreshDerived();
+    rerenderSrc();
+  }
+
+  /* ================================================ Troop-lift view === */
+  function findTLLine(id) {
+    for (var i = 0; i < state.tlLines.length; i++) {
+      if (state.tlLines[i].id === String(id)) return state.tlLines[i];
+    }
+    return null;
+  }
+  function lineEntry(l) {
+    if (l.entryId) return findEntry(l.entryId);
+    if (l.status === 'ok' && l.row != null) return findEntry('t' + l.row);
+    return null;
+  }
+
+  function tlBlocks() {
+    var blocks = [], title = '', cur = null;
+    state.tlLines.forEach(function (l) {
+      if (l.kind === 'title') { title = l.text; return; }
+      if (l.kind === 'date') {
+        cur = { key: 'b' + l.row, date: l.date, tbc: !!l.tbc, lines: [] };
+        blocks.push(cur);
+        return;
+      }
+      if (!cur) { cur = { key: 'b0', date: null, lines: [] }; blocks.push(cur); }
+      cur.lines.push({ id: l.id, status: l.status || 'ok', text: l.text || '' });
+    });
+    return { blocks: blocks, title: title };
+  }
+
+  function commitTL(id, raw) {
+    var l = findTLLine(id);
+    if (!l) return { ok: false, msg: 'line not found' };
+    if (!raw) return { ok: false, msg: 'line is empty — use ✕ to delete it' };
+    var p = T.parseTLLineText(raw);
+    if (!p.ok) {
+      return { ok: false, msg: 'expected: <HHMM|TBC> <FROM> - <TO> <N> BUSES|TONNERS (<COY ACTIVITY>)' };
+    }
+    var e = lineEntry(l);
+    if (!e) {
+      e = {
+        id: (l.row != null && !l.entryId) ? 't' + l.row : l.id,
+        source: (l.status === 'new' || l.dup || l.entryId) ? 'MANUAL' : 'TROOPLIFT',
+        via: 'tl', rawText: raw,
+        date: l.date || '', eDate: l.date || '', dayDiff: 0, nextDay: false,
+        officer: '', phone: '', unit: '', row: l.row,
+        flagged: false, tbc: false, edited: true
+      };
+      state.entries.push(e);
+    }
+    T.applyTLFields(e, p.fields);
+    e.edited = true;
+    e.date = l.date || e.date || '';
+    e.eDate = e.date;
+    e.dayDiff = 0; e.nextDay = false;
+    e.rawText = raw;
+    l.status = 'ok'; l.text = raw; l.entryId = e.id;
+    p.fields.coys.forEach(registerCoy);
+    saveStore();
+    refreshDerived();
+    return { ok: true };
+  }
+
+  function addTLLine(blockKey) {
+    var b = tlBlocks().blocks.filter(function (x) { return String(x.key) === String(blockKey); })[0];
+    if (!b) return;
+    var idx = -1;
+    for (var i = 0; i < state.tlLines.length; i++) {
+      var l = state.tlLines[i];
+      if (l.kind === 'line' && (l.date || null) === (b.date || null)) idx = i;
+    }
+    var nl = { id: 'm' + Date.now(), row: null, kind: 'line', status: 'new', text: '', date: b.date || null, entryId: null };
+    if (idx > -1) state.tlLines.splice(idx + 1, 0, nl);
+    else state.tlLines.push(nl);
+    saveStore();
+    updateSavePill();
+    rerenderSrc();
+  }
+  function dupTLLine(id) {
+    var l = findTLLine(id);
+    if (!l) return;
+    var copy = { id: 'm' + Date.now() + Math.floor(Math.random() * 99), row: null, kind: 'line', status: 'new', text: l.text, date: l.date || null, entryId: null, dup: true };
+    state.tlLines.splice(state.tlLines.indexOf(l) + 1, 0, copy);
+    saveStore();
+    updateSavePill();
+    rerenderSrc();
+  }
+  function delTLLine(id) {
+    var l = findTLLine(id);
+    if (!l) return;
+    var e = lineEntry(l);
+    if (e) state.entries.splice(state.entries.indexOf(e), 1);
+    state.tlLines.splice(state.tlLines.indexOf(l), 1);
+    l.entryId && delete l.entryId;
+    saveStore();
+    refreshDerived();
+    rerenderSrc();
   }
 
   /* ---------------------------------------------------------- tabs -- */
@@ -435,34 +633,102 @@
     $('panel-schedule').style.display = tab === 'schedule' ? '' : 'none';
     $('panel-grid').style.display = tab === 'grid' ? '' : 'none';
     document.body.classList.toggle('tab-grid', tab === 'grid');
+    // blank state when nothing is parsed yet
+    var blank = tab === 'grid' && !state.model;
+    $('sheet-panel').classList.toggle('blank', blank);
+    if (tab === 'grid' && state.model) setSrc(state.srcTab);
   }
 
-  function mountGrid() {
-    if (!window.TCRSSheet) return;
-    if (state.grid) { state.grid.rerender(); return; }
-    state.grid = window.TCRSSheet.mount($('sheet-container'), {
-      columns: GRID_COLS,
-      getRows: filteredEntries,
-      commit: commitEntry,
-      onAdd: addRow,
-      onDup: dupRow,
-      onDel: delRow
-    });
+  function setSrc(s) {
+    state.srcTab = s;
+    $('sheet-panel').classList.remove('blank');
+    $('btn-src-icrf').classList.toggle('on', s === 'icrf');
+    $('btn-src-tl').classList.toggle('on', s === 'tl');
+    $('icrf-container').style.display = s === 'icrf' ? '' : 'none';
+    $('tl-container').style.display = s === 'tl' ? '' : 'none';
+    $('icrf-foot').style.display = s === 'icrf' ? '' : 'none';
+    $('tl-foot').style.display = s === 'tl' ? '' : 'none';
+    mountSrc();
+    applySearch();
   }
 
-  var GRID_COLS = [
-    { key: 'date', label: 'Date', w: 104, type: 'date' },
-    { key: 'timeStart', label: 'Start', w: 66, type: 'time' },
-    { key: 'timeEnd', label: 'End', w: 66, type: 'time' },
-    { key: 'coys', label: 'Coy', w: 118, type: 'coys' },
-    { key: 'activity', label: 'Activity', w: 240, flex: true, type: 'text' },
-    { key: 'from', label: 'From', w: 148, type: 'text' },
-    { key: 'to', label: 'To', w: 148, type: 'text' },
-    { key: 'qty', label: 'Qty', w: 52, type: 'num' },
-    { key: 'vehicleType', label: 'Veh / type', w: 110, type: 'text' },
-    { key: 'officer', label: 'POC', w: 150, type: 'text' },
-    { key: 'phone', label: 'Phone', w: 98, type: 'text' },
-    { key: '_src', label: 'Src', w: 86, type: 'src' }
+  function mountSrc() {
+    if (!window.TCRSSheet || !state.model) return;
+    if (!state.icrfGrid) {
+      state.icrfGrid = TCRSSheet.mount($('icrf-container'), {
+        columns: ICRF_COLS,
+        getRows: icrfRows,
+        commit: commitICRF,
+        onAdd: addIcrfRow, onDup: dupIcrf, onDel: delIcrf,
+        note: rowsNote
+      });
+    } else {
+      state.icrfGrid.rerender();
+    }
+    if (!state.tlGrid) {
+      state.tlGrid = TCRSSheet.mountTL($('tl-container'), {
+        getBlocks: tlViewBlocks,
+        commitLine: commitTL,
+        dupLine: dupTLLine,
+        delLine: delTLLine,
+        addLine: addTLLine,
+        entryFor: entryForLine,
+        note: tlNote
+      });
+    } else {
+      state.tlGrid.rerender();
+    }
+  }
+
+  function rerenderSrc() {
+    if (state.icrfGrid) state.icrfGrid.rerender();
+    if (state.tlGrid) state.tlGrid.rerender();
+  }
+
+  function applySearch() {
+    var t = $('grid-search').value;
+    if (state.icrfGrid && state.srcTab === 'icrf') state.icrfGrid.setSearch(t);
+    if (state.tlGrid && state.srcTab === 'tl') state.tlGrid.setSearch(t);
+  }
+
+  function rowsNote(all, shown) {
+    var skips = state.skipped.length;
+    var base = shown.length + ' of ' + all.length + ' vehicle rows shown';
+    if (shown.length !== all.length) base += ' — the rest hidden by your filters';
+    if (skips) base += ' · ' + skips + ' skipped row' + (skips === 1 ? '' : 's') +
+      ' (only the first cell can fix them into the schedule)';
+    return base;
+  }
+
+  function tlViewBlocks() {
+    return tlBlocks().blocks;
+  }
+  function entryForLine(line) {
+    var l = findTLLine(line.id);
+    return l ? lineEntry(l) : null;
+  }
+  function tlNote(total, shown, blocks) {
+    var title = tlBlocks().title;
+    var n = blocks.length;
+    return title + ' · ' + n + ' days · ' + shown + ' of ' + total + ' lines shown' +
+      (shown !== total ? ' — the rest hidden by your filters' : '');
+  }
+
+  var ICRF_COLS = [
+    { key: 'colA', label: 'SCH / company / activity', w: 210, flex: true, type: 'text' },
+    { key: 'vehicleType', label: 'Veh type', w: 84, type: 'text' },
+    { key: 'qty', label: 'Qty', w: 44, type: 'num' },
+    { key: 'reqTo', label: "Req'd TO", w: 74, type: 'text' },
+    { key: 'sdate', label: 'Start date', w: 82, type: 'date' },
+    { key: 'stime', label: 'Start time', w: 74, type: 'time' },
+    { key: 'edate', label: 'End date', w: 82, type: 'date' },
+    { key: 'etime', label: 'End time', w: 74, type: 'time' },
+    { key: 'from', label: 'Reporting', w: 128, type: 'text' },
+    { key: 'to', label: 'Destination', w: 128, type: 'text' },
+    { key: 'officer', label: 'Officer', w: 126, type: 'text' },
+    { key: 'phone', label: 'Phone', w: 92, type: 'text' },
+    { key: 'unit', label: 'Unit', w: 86, type: 'text' },
+    { key: '_src', label: 'Row', w: 78, type: 'src' }
   ];
 
   /* ---------------------------------------------------------- render -- */
@@ -470,7 +736,7 @@
     renderStats(filteredEntries());
     drawView();
     renderMonthBanner();
-    if (state.grid && state.tab === 'grid') state.grid.rerender();
+    if (state.tab === 'grid') rerenderSrc();
     updateSavePill();
   }
 
@@ -933,10 +1199,11 @@
 
     // tabs
     $('btn-tab-schedule').addEventListener('click', function () { setTab('schedule'); });
-    $('btn-tab-grid').addEventListener('click', function () {
-      setTab('grid');
-      if (state.model) mountGrid(); else state.grid = state.grid || null;
-    });
+    $('btn-tab-grid').addEventListener('click', function () { setTab('grid'); });
+
+    // live-sheet sub-tabs
+    $('btn-src-icrf').addEventListener('click', function () { setSrc('icrf'); });
+    $('btn-src-tl').addEventListener('click', function () { setSrc('tl'); });
 
     // schedule view
     $('view-date').addEventListener('click', function () { state.view = 'date'; refreshDerived(); });
@@ -955,9 +1222,7 @@
       refreshDerived();
     });
 
-    $('grid-search').addEventListener('input', function (e) {
-      if (state.grid) state.grid.setSearch(e.target.value);
-    });
+    $('grid-search').addEventListener('input', function (e) { applySearch(); });
     var discardArm = null;
     $('grid-discard').addEventListener('click', function () {
       if (!state.model) return;
@@ -967,7 +1232,7 @@
         btn.classList.remove('armed'); btn.textContent = 'Reset edits';
         resetEdits();
         $('grid-search').value = '';
-        if (state.grid) state.grid.setSearch('');
+        applySearch();
       } else {
         btn.classList.add('armed');
         btn.textContent = 'Confirm reset?';
@@ -1009,10 +1274,12 @@
   if (/^#auto/.test(location.hash)) {
     if (location.hash === '#auto-coy') state.view = 'coy';
     if (location.hash === '#auto-grid') state.tab = 'grid';
+    if (location.hash === '#auto-tl') { state.tab = 'grid'; state.srcTab = 'tl'; }
     setTimeout(function () { $('btn-sample').click(); }, 60);
   }
 
   init();
+  setTab(state.tab);   // sync visibility with the (possibly hash-set) tab
 
   /* debug hook (used by tests / smoke runs; harmless otherwise) */
   window.__tcrs = {
@@ -1022,10 +1289,12 @@
     drawView: drawView,
     filteredEntries: filteredEntries,
     refresh: refresh,
-    commitEntry: commitEntry,
-    addRow: addRow, dupRow: dupRow, delRow: delRow,
+    commitICRF: commitICRF,
+    commitTL: commitTL,
+    addIcrfRow: addIcrfRow, dupIcrf: dupIcrf, delIcrf: delIcrf,
+    dupTLLine: dupTLLine, delTLLine: delTLLine, addTLLine: addTLLine,
     resetEdits: resetEdits,
-    setTab: setTab,
+    setTab: setTab, setSrc: setSrc,
     renderUploadStatus: renderUploadStatus
   };
 })();
