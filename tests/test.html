@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>parser test</title>
+<script src="../vendor/exceljs.min.js"></script>
+<script src="../parser.js"></script>
+</head><body>
+<pre id="out"></pre>
+<script>
+(function () {
+  var out = [];
+  var failures = 0;
+  function ok(name, cond, extra) {
+    out.push((cond ? 'PASS' : 'FAIL') + '  ' + name + (cond ? '' : '   [' + (extra === undefined ? '' : extra) + ']'));
+    if (!cond) failures++;
+  }
+  function aeq(arr, expected, name) {
+    var a = JSON.stringify(arr), b = JSON.stringify(expected);
+    ok(name, a === b, a + ' vs ' + b);
+  }
+
+  async function main() {
+    try {
+      var [icrfBuf, tlBuf] = await Promise.all([
+        fetch('../samples/ICRF.xlsx').then(function (r) { return r.arrayBuffer(); }),
+        fetch('../samples/Troop Lift Sample.xlsx').then(function (r) { return r.arrayBuffer(); })
+      ]);
+      var wbA = new ExcelJS.Workbook(); await wbA.xlsx.load(icrfBuf);
+      var wbB = new ExcelJS.Workbook(); await wbB.xlsx.load(tlBuf);
+      var T = window.TCRS;
+      var model = T.parseWorkbooks({ worksheets: wbA.worksheets }, { worksheets: wbB.worksheets });
+
+      ok('month detected = NOV (11)', model.month === 11, model.month);
+      ok('year = 2026', model.year === 2026, model.year);
+      ok('86 ICRF entries',
+        model.entries.filter(function (e) { return e.source === 'ICRF'; }).length === 86,
+        model.entries.filter(function (e) { return e.source === 'ICRF'; }).length);
+      var SCH4 = { '1ST': 1, '4TH': 1, '5TH': 1, '6TH': 1, '7TH': 1, 'SCHWIDE': 1 };
+      var tlRel = model.entries.filter(function (e) {
+        return e.source === 'TROOPLIFT' && e.coys.some(function (c) { return SCH4[c]; });
+      });
+      ok('195 School-4 Troop Lift entries', tlRel.length === 195, tlRel.length);
+      ok('TL unmatched = 0', model.tlUnmatched.length === 0, JSON.stringify(model.tlUnmatched.slice(0, 3)));
+      ok('38 date fixes', model.icrfFixes.length === 38, model.icrfFixes.length);
+      ok('5 skipped rows', model.icrfSkipped.length === 5, model.icrfSkipped.length);
+      aeq(T.sortCoys(Object.keys(model.entries.reduce(function (m, e) {
+        if (e.source !== 'ICRF') return m;
+        e.coys.forEach(function (c) { m[c] = 1; }); return m;
+      }, {}))),
+        ['1ST', '4TH', '5TH', '6TH', '7TH', 'SCHWIDE'], 'ICRF coy set ordered');
+      aeq(model.companies, ['1ST', '4TH', '5TH', '6TH', '7TH', 'SCHWIDE'], 'companies full list');
+
+      // default view: all companies enabled, only School 4
+      var def = T.filterEntries(model, { companies: model.companies, onlySchool4: true });
+      ok('combined School 4 = 281 movements', def.length === 281, def.length);
+
+      // spot checks: 2026-11-02
+      var d2 = def.filter(function (e) { return e.date === '2026-11-02'; });
+      function byCoy(n, der) { return d2.filter(function (e) { return e.source === der && e.coys.indexOf(n) > -1; }).length; }
+      ok('02NOV icrf 7TH=1', byCoy('7TH', 'ICRF') === 1, byCoy('7TH', 'ICRF'));
+      ok('02NOV icrf 4TH=1', byCoy('4TH', 'ICRF') === 1, byCoy('4TH', 'ICRF'));
+      ok('02NOV icrf 6TH=3', byCoy('6TH', 'ICRF') === 3, byCoy('6TH', 'ICRF'));
+      ok('02NOV tl 7TH=2', byCoy('7TH', 'TROOPLIFT') === 2, byCoy('7TH', 'TROOPLIFT'));
+      ok('02NOV tl 6TH=2', byCoy('6TH', 'TROOPLIFT') === 2, byCoy('6TH', 'TROOPLIFT'));
+
+      // 04, 12, 18 Nov
+      function daycoy(d, coy, der) {
+        return def.filter(function (e) { return e.date === d && e.source === der && e.coys.indexOf(coy) > -1; }).length;
+      }
+      ok('04NOV icrf 4TH=3', daycoy('2026-11-04', '4TH', 'ICRF') === 3, daycoy('2026-11-04', '4TH', 'ICRF'));
+      ok('04NOV tl 1ST=2', daycoy('2026-11-04', '1ST', 'TROOPLIFT') === 2, daycoy('2026-11-04', '1ST', 'TROOPLIFT'));
+      ok('12NOV icrf 5TH=4', daycoy('2026-11-12', '5TH', 'ICRF') === 4, daycoy('2026-11-12', '5TH', 'ICRF'));
+      ok('12NOV tl 5TH=4', daycoy('2026-11-12', '5TH', 'TROOPLIFT') === 4, daycoy('2026-11-12', '5TH', 'TROOPLIFT'));
+      ok('18NOV icrf 7TH=2', daycoy('2026-11-18', '7TH', 'ICRF') === 2, daycoy('2026-11-18', '7TH', 'ICRF'));
+      ok('18NOV tl 4TH=3', daycoy('2026-11-18', '4TH', 'TROOPLIFT') === 3, daycoy('2026-11-18', '4TH', 'TROOPLIFT'));
+
+      // flagged TL entry parse
+      var f = def.filter(function (e) { return e.timeStart === '0730' && e.activity === 'HG RECCE'; });
+      ok('flagged line parsed: 1 found, 7TH, RHC->HG RANGE, 1 BUSES, flagged',
+        f.length === 1 && f[0].coys[0] === '7TH' && f[0].from === 'RHC' && f[0].to === 'HG RANGE' &&
+        f[0].qty === 1 && f[0].vehicleType === 'BUSES' && f[0].flagged === true,
+        JSON.stringify(f[0]));
+
+      // SCHWIDE row 87: text date 24/11/26
+      var sw = def.filter(function (e) { return e.coys[0] === 'SCHWIDE' && e.activity === 'RE-RM 3'; });
+      ok('SCHWIDE RE-RM 3 on 24/11/26 with SOUV x3',
+        sw.length === 2 && sw[0].date === '2026-11-24' && sw.every(function (e) { return e.vehicleType !== 'None'; }),
+        JSON.stringify(sw.map(function (e) { return [e.date, e.vehicleType, e.qty]; })));
+
+      // swap fix semantics: an ICRF datetime '(2,11)' became 2026-11-02
+      var nov2 = def.filter(function (e) { return e.date === '2026-11-02' && e.source === 'ICRF'; });
+      ok('02NOV icrf present after day/month fix', nov2.length === 5, nov2.length);
+
+      // text-date strings not swapped: 18/11/26 stays 18 Nov
+      var nov18 = def.filter(function (e) { return e.date === '2026-11-18' && e.source === 'ICRF'; });
+      ok('18NOV icrf = 9 rows (4TH4+5TH2+6TH1+7TH2)', nov18.length === 9, nov18.length);
+
+      // time labels
+      var tE = def.filter(function (e) { return e.id === 'i7'; })[0];
+      ok('timeLabel of row7 = 05:00 - 08:00', T.timeLabel(tE) === '05:00 - 08:00', T.timeLabel(tE));
+      var r8 = def.filter(function (e) { return e.id === 'i8'; })[0];
+      ok('row8 spans 02-05 Nov after fix (+3d)', r8 && r8.dayDiff === 3 && r8.nextDay === true,
+        JSON.stringify([r8.date, r8.dayDiff]));
+
+      // onlyS4=false keeps non-ordinal TL lines visible
+      var allo = T.filterEntries(model, { companies: model.companies, onlySchool4: false });
+      ok('all-movements view > 281 (includes other units)', allo.length > 281, allo.length);
+
+      document.getElementById('out').textContent = out.join('\n') +
+        '\n\n' + (failures ? failures + ' FAILURES' : 'ALL ' + out.length + ' TESTS PASSED');
+    } catch (e) {
+      document.getElementById('out').textContent = 'CRASH: ' + (e && e.stack || e) + '\n\n' + out.join('\n');
+      failures = 1;
+    }
+    if (failures) document.title = 'TESTS FAILED';
+    else document.title = 'TESTS PASSED';
+  }
+  main();
+})();
+</script></body></html>

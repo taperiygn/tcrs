@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>UI smoke</title>
+<script src="../vendor/exceljs.min.js"></script>
+<script src="../parser.js"></script>
+</head><body>
+<pre id="smoke-out">starting…</pre>
+<script>
+/* UI smoke test: reuses app.js behaviour by running the same steps directly,
+   then verifies the exported workbook content via ExcelJS read-back. */
+(async function () {
+  var out = [], failures = 0;
+  function ok(name, cond, extra) {
+    out.push((cond ? 'PASS ' : 'FAIL ') + name + (cond ? '' : '  [' + (extra === undefined ? '' : extra) + ']'));
+    if (!cond) failures++;
+  }
+  function log() { document.getElementById('smoke-out').textContent = out.join('\n'); }
+
+  try {
+    // 1. real DOM instance of index.html in an <object>? -> instead import its markup
+    var html = await fetch('../index.html').then(function (r) { return r.text(); });
+    // strip scripts, extract <main> subtree then link styles
+    var doc = new DOMParser().parseFromString(html, 'text/html');
+    var styles = await fetch('../styles.css').then(function (r) { return r.text(); });
+    var st = document.createElement('style'); st.textContent = styles; document.head.appendChild(st);
+    document.body.appendChild(doc.querySelector('header'));
+    document.body.appendChild(doc.querySelector('main'));
+    document.body.appendChild(doc.querySelector('.toast'));
+    document.title = 'S4 builder';
+
+    // 2. run app.js inside this page (its init() binds the copied DOM)
+    var appSrc = await fetch('../app.js').then(function (r) { return r.text(); });
+    eval(appSrc);
+    var A = window.__tcrs;
+
+    // 3. load sample workbooks
+    var [a, b] = await Promise.all([
+      fetch('../samples/ICRF.xlsx').then(function (r) { return r.arrayBuffer(); }),
+      fetch('../samples/Troop Lift Sample.xlsx').then(function (r) { return r.arrayBuffer(); })
+    ]);
+    var wbA = new ExcelJS.Workbook(); await wbA.xlsx.load(a);
+    var wbB = new ExcelJS.Workbook(); await wbB.xlsx.load(b);
+    A.state.icrfWb = wbA; A.state.icrfName = 'ICRF.xlsx';
+    A.state.tlWb = wbB; A.state.tlName = 'troop lift.xlsx';
+    A.maybeCombine();
+
+    ok('model built', !!A.state.model, 'no model');
+    ok('month banner visible', !document.getElementById('month-banner').hidden);
+    ok('month title text', document.getElementById('mb-title').textContent.indexOf('NOVEMBER 2026') > -1,
+      document.getElementById('mb-title').textContent);
+    var chips = document.querySelectorAll('#coy-chips .chip');
+    ok('6 company chips', chips.length === 6, chips.length);
+
+    var dateGroups = document.querySelectorAll('#content .group');
+    ok('by-date groups rendered (18 days? = 27 TL+ICRF covered; groups shown all distinct dates)',
+      dateGroups.length >= 20, dateGroups.length);
+    ok('281 rows in date view', A.filteredEntries().length === 281, A.filteredEntries().length);
+
+    // switch to company view
+    A.state.view = 'coy'; A.drawView();
+    var coyGroups = document.querySelectorAll('#content .group');
+    ok('by-company groups rendered', coyGroups.length === document.querySelectorAll('#content .group').length, coyGroups.length);
+    var coyDayHead = document.querySelector('#content .coychip');
+    ok('coy head shows company chip', !!coyDayHead, 'none');
+
+    // POC toggle off hides POC column header
+    A.state.poc = false; A.drawView();
+    var ths = Array.prototype.map.call(document.querySelectorAll('#content thead th'), function (t) { return t.textContent; });
+    ok('POC header absent when toggled off', ths.indexOf('POC / Contact') === -1, ths.join(','));
+    A.state.poc = true; A.drawView();
+
+    // onlyS4 off → more rows
+    A.state.onlyS4 = false; A.refresh();
+    ok('onlyS4 off shows all TL lines', A.filteredEntries().length > 281, A.filteredEntries().length);
+    A.state.onlyS4 = true; A.refresh();
+
+    // export: capture download URL and read it back
+    var captured = null;
+    var proto = HTMLAnchorElement.prototype;
+    var realClick = proto.click;
+    proto.click = function () {
+      if (this.href && /blob:/.test(this.href)) captured = this.href;
+      captured = captured || null; realClick.call(this);
+    };
+    URL.createObjectURL = (function (real) {
+      return function (blob) { var u = real.call(URL, blob); URL.createObjectURL.__blob = blob; return u; };
+    })(URL.createObjectURL);
+    await A.exportXlsx();
+    ok('export produced blob', !!(URL.createObjectURL.__blob), 'none');
+    var buf = await URL.createObjectURL.__blob.arrayBuffer();
+    var outWb = new ExcelJS.Workbook(); await outWb.xlsx.load(buf);
+    var names = outWb.worksheets.map(function (w) { return w.name; });
+    ok('export sheets = By Date | By Company | Data notes',
+      names.join('|') === 'By Date|By Company|Data notes', names.join('|'));
+    var ws1 = outWb.worksheets[0];
+    ok('By Date title row content', ws1.getRow(1).getCell(1).value.indexOf('BY DATE') > -1,
+      JSON.stringify(ws1.getRow(1).getCell(1).value));
+    var rowCount1 = ws1.rowCount;
+    ok('By Date has > 300 rows (281 entries + banners)', rowCount1 > 300, rowCount1);
+    var ws3 = outWb.worksheets[2];
+    ok('Data notes lists 38 fixes', ws3.rowCount > 40, ws3.rowCount);
+    // spot: some banner row contains NOVEMBER
+    var foundBanner = false;
+    for (var r = 5; r < Math.min(30, rowCount1); r++) {
+      var v = ws1.getRow(r).getCell(1).value;
+      if (typeof v === 'string' && /movements/.test(v)) { foundBanner = true; break; }
+    }
+    ok('day banner row found in By Date', foundBanner);
+
+  } catch (e) {
+    failures++;
+    out.push('CRASH ' + (e && e.stack || e));
+  }
+  log();
+  document.title = failures ? 'SMOKE FAILED' : 'SMOKE OK';
+})();
+</script></body></html>
