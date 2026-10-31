@@ -77,8 +77,20 @@
   function storeKey() {
     return STORE_PREFIX + state.model.month + '-' + state.model.year;
   }
-  function saveStore() {
+  var saveTimer = null, savePending = false;
+  function saveStore() {            // debounced — heavy JSON write happens after a pause
     if (!state.model) return;
+    savePending = true;
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(flushSave, 700);
+    var pill = $('save-pill');
+    pill.classList.add('show');
+    pill.textContent = 'saving…';
+  }
+  function flushSave() {
+    clearTimeout(saveTimer);
+    if (!savePending || !state.model) return;
+    savePending = false;
     try {
       localStorage.setItem(storeKey(), JSON.stringify({
         v: 3, at: Date.now(),
@@ -115,7 +127,7 @@
     state.tlLines = JSON.parse(JSON.stringify(state.pristine.tlLines));
     state.skipped = JSON.parse(JSON.stringify(state.pristine.skipped));
     normalizeTLLines();
-    refreshDerived();
+    changed();
     rerenderSrc();
     toast('Restored the freshly parsed data.', false);
   }
@@ -356,8 +368,19 @@
   function markEdited(e) {
     e.edited = true;
     saveStore();
+    changed();                       // the grid already redraws itself after a commit
+  }
+
+  /* The Schedule tab is rebuilt lazily: edits made in the Live sheet only mark
+     it stale, and it is refreshed when you switch back to it. */
+  function changed() {
+    state.scheduleStale = true;
+    if (state.tab !== 'grid') flushSchedule();
+  }
+  function flushSchedule() {
+    if (!state.scheduleStale || !state.model) return;
+    state.scheduleStale = false;
     refreshDerived();
-    rerenderSrc();
   }
 
   /* ===================================================== ICRF view ==== */
@@ -477,7 +500,7 @@
     });
     state.skipped.splice(idx, 1);
     saveStore();
-    refreshDerived();
+    changed();
     rerenderSrc();
     toast('Row ' + s.row + ' brought back — <b>set its start date next</b> so it lands in the schedule.', false);
     return { ok: true };
@@ -497,7 +520,7 @@
       flagged: false, tbc: false, row: maxRow + 1, edited: true
     });
     saveStore();
-    updateSavePill();
+    changed();
     rerenderSrc();
   }
   function dupIcrf(id) {
@@ -511,7 +534,7 @@
     copy.via = 'icrf';
     state.entries.push(copy);
     saveStore();
-    updateSavePill();
+    changed();
     rerenderSrc();
   }
   function delIcrf(id) {
@@ -524,7 +547,7 @@
     if (!e) return;
     state.entries.splice(state.entries.indexOf(e), 1);
     saveStore();
-    refreshDerived();
+    changed();
     rerenderSrc();
   }
 
@@ -585,7 +608,7 @@
     l.status = 'ok'; l.text = raw; l.entryId = e.id;
     p.fields.coys.forEach(registerCoy);
     saveStore();
-    refreshDerived();
+    changed();
     return { ok: true };
   }
 
@@ -601,7 +624,7 @@
     if (idx > -1) state.tlLines.splice(idx + 1, 0, nl);
     else state.tlLines.push(nl);
     saveStore();
-    updateSavePill();
+    changed();
     rerenderSrc();
   }
   function dupTLLine(id) {
@@ -610,7 +633,7 @@
     var copy = { id: 'm' + Date.now() + Math.floor(Math.random() * 99), row: null, kind: 'line', status: 'new', text: l.text, date: l.date || null, entryId: null, dup: true };
     state.tlLines.splice(state.tlLines.indexOf(l) + 1, 0, copy);
     saveStore();
-    updateSavePill();
+    changed();
     rerenderSrc();
   }
   function delTLLine(id) {
@@ -621,7 +644,7 @@
     state.tlLines.splice(state.tlLines.indexOf(l), 1);
     l.entryId && delete l.entryId;
     saveStore();
-    refreshDerived();
+    changed();
     rerenderSrc();
   }
 
@@ -637,6 +660,7 @@
     var blank = tab === 'grid' && !state.model;
     $('sheet-panel').classList.toggle('blank', blank);
     if (tab === 'grid' && state.model) setSrc(state.srcTab);
+    if (tab === 'schedule') { flushSchedule(); flushSave(); }
   }
 
   function setSrc(s) {
@@ -654,7 +678,7 @@
 
   function mountSrc() {
     if (!window.TCRSSheet || !state.model) return;
-    if (!state.icrfGrid) {
+    if (state.srcTab === 'icrf' && !state.icrfGrid) {
       state.icrfGrid = TCRSSheet.mount($('icrf-container'), {
         columns: ICRF_COLS,
         getRows: icrfRows,
@@ -662,10 +686,10 @@
         onAdd: addIcrfRow, onDup: dupIcrf, onDel: delIcrf,
         note: rowsNote
       });
-    } else {
+    } else if (state.srcTab === 'icrf') {
       state.icrfGrid.rerender();
     }
-    if (!state.tlGrid) {
+    if (state.srcTab === 'tl' && !state.tlGrid) {
       state.tlGrid = TCRSSheet.mountTL($('tl-container'), {
         getBlocks: tlViewBlocks,
         commitLine: commitTL,
@@ -673,16 +697,17 @@
         delLine: delTLLine,
         addLine: addTLLine,
         entryFor: entryForLine,
+        lineToEdit: lineToEdit,
         note: tlNote
       });
-    } else {
+    } else if (state.srcTab === 'tl') {
       state.tlGrid.rerender();
     }
   }
 
-  function rerenderSrc() {
-    if (state.icrfGrid) state.icrfGrid.rerender();
-    if (state.tlGrid) state.tlGrid.rerender();
+  function rerenderSrc() {           // only the visible grid; the other redraws when shown
+    if (state.srcTab === 'icrf' && state.icrfGrid) state.icrfGrid.rerender();
+    if (state.srcTab === 'tl' && state.tlGrid) state.tlGrid.rerender();
   }
 
   function applySearch() {
@@ -700,15 +725,27 @@
     return base;
   }
 
-  function tlViewBlocks() {
-    return tlBlocks().blocks;
+  var tlIdx = { lines: {}, entries: {} }, tlTitle = '';
+  function tlViewBlocks() {          // also rebuilds id lookups once per render
+    tlIdx = { lines: {}, entries: {} };
+    state.tlLines.forEach(function (l) { if (l.id) tlIdx.lines[l.id] = l; });
+    state.entries.forEach(function (e) { tlIdx.entries[e.id] = e; });
+    var b = tlBlocks();
+    tlTitle = b.title;
+    return b.blocks;
   }
   function entryForLine(line) {
-    var l = findTLLine(line.id);
-    return l ? lineEntry(l) : null;
+    var l = tlIdx.lines[line.id];
+    if (!l) return null;
+    if (l.entryId) return tlIdx.entries[l.entryId] || null;
+    return l.status === 'ok' && l.row != null ? tlIdx.entries['t' + l.row] || null : null;
+  }
+  function lineToEdit(id) {
+    var l = findTLLine(id);
+    return l ? { text: l.text || '', isNew: l.status === 'new' } : null;
   }
   function tlNote(total, shown, blocks) {
-    var title = tlBlocks().title;
+    var title = tlTitle;
     var n = blocks.length;
     return title + ' · ' + n + ' days · ' + shown + ' of ' + total + ' lines shown' +
       (shown !== total ? ' — the rest hidden by your filters' : '');
@@ -1245,7 +1282,9 @@
     });
 
     $('btn-export').addEventListener('click', exportXlsx);
-    $('btn-print').addEventListener('click', function () { window.print(); });
+    $('btn-print').addEventListener('click', function () { flushSchedule(); window.print(); });
+    window.addEventListener('beforeunload', flushSave);
+    document.addEventListener('visibilitychange', function () { if (document.hidden) flushSave(); });
 
     $('btn-sample').addEventListener('click', async function () {
       try {
@@ -1294,6 +1333,7 @@
     addIcrfRow: addIcrfRow, dupIcrf: dupIcrf, delIcrf: delIcrf,
     dupTLLine: dupTLLine, delTLLine: delTLLine, addTLLine: addTLLine,
     resetEdits: resetEdits,
+    flushSave: flushSave, flushSchedule: flushSchedule,
     setTab: setTab, setSrc: setSrc,
     renderUploadStatus: renderUploadStatus
   };

@@ -594,9 +594,7 @@ table.mov .datecell .dow { color: var(--accent); font-weight: 700; margin-left: 
   text-align: left;
   font-size: 10px; font-weight: 750; letter-spacing: .12em;
   text-transform: uppercase; color: var(--ink-faint);
-  background: rgba(250, 251, 253, .92);
-  -webkit-backdrop-filter: blur(14px);
-  backdrop-filter: blur(14px);
+  background: #f9fafc;
   border-bottom: 1px solid rgba(23,42,58,.1);
   border-right: 1px solid rgba(23,42,58,.045);
   padding: 9px 12px; white-space: nowrap;
@@ -610,7 +608,6 @@ table.mov .datecell .dow { color: var(--accent); font-weight: 700; margin-left: 
   white-space: nowrap;
   max-width: 320px; overflow: hidden; text-overflow: ellipsis;
   cursor: text;
-  transition: background .12s;
 }
 .sheet-table tbody tr:hover td { background: rgba(71,133,255,.045); }
 .sheet-table td.noclick { cursor: default; }
@@ -703,8 +700,7 @@ table.mov .datecell .dow { color: var(--accent); font-weight: 700; margin-left: 
 .tl-date {
   display: flex; align-items: baseline; gap: 10px;
   padding: 7px 4px; position: sticky; top: 0; z-index: 5;
-  background: rgba(250, 251, 253, .95);
-  -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
+  background: #f9fafc;
   border-bottom: 1px solid rgba(23,42,58,.08);
   font-variant-numeric: tabular-nums;
 }
@@ -716,7 +712,7 @@ table.mov .datecell .dow { color: var(--accent); font-weight: 700; margin-left: 
   display: flex; align-items: center; gap: 10px;
   padding: 5.5px 4px;
   border-bottom: 1px solid rgba(23,42,58,.045);
-  cursor: text; transition: background .12s;
+  cursor: text;
   font-family: var(--mono); font-size: 12px; line-height: 1.45;
 }
 .tl-line:hover { background: rgba(71,133,255,.045); }

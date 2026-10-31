@@ -96,6 +96,7 @@
     var rescued = A.state.entries.filter(function (e) { return e.activity === 'RESCUED ROW'; })[0];
     ok('rescued row registered', !!rescued && rescued.coys.join(',') === '6TH', rescued && rescued.id);
 
+    A.flushSave();
     ok('carried edits auto-saved to storage v3', (function () {
       var k = Object.keys(localStorage).filter(function (k0) { return k0.indexOf('tcrs:v3:') === 0; })[0];
       var d = k && JSON.parse(localStorage.getItem(k) || '{}');
@@ -105,7 +106,12 @@
     /* ---------- scheduling still reflects ICRF edits ---------- */
     var shown = Array.prototype.some.call(document.querySelectorAll('#content .act'),
       function (n) { return n.textContent === 'ICRF EDIT XYZ'; });
-    ok('schedule view reflects the ICRF edit', shown, 'not found');
+    ok('schedule is NOT rebuilt while editing in the live sheet', !shown && A.state.scheduleStale === true);
+    A.setTab('schedule');
+    shown = Array.prototype.some.call(document.querySelectorAll('#content .act'),
+      function (n) { return n.textContent === 'ICRF EDIT XYZ'; });
+    ok('schedule reflects the ICRF edit after switching tabs', shown && !A.state.scheduleStale, 'not found');
+    A.setTab('grid');
 
     /* ---------- Troop-lift one-column view ---------- */
     A.setSrc('tl');
@@ -131,8 +137,10 @@
     var added = A.state.entries.filter(function (e) { return e.activity === 'TL TEST EDIT'; })[0];
     ok('TL edit lands in schedule entries', !!added && added.timeStart === '0915' &&
       added.qty === 2 && added.kind === 'bus', added && JSON.stringify(added));
+    A.setTab('schedule');
     shown = Array.prototype.some.call(document.querySelectorAll('#content .act'),
       function (n) { return n.textContent === 'TL TEST EDIT'; });
+    A.setTab('grid');
     ok('schedule view reflects the TL line', shown, 'not found');
 
     var badTL = A.commitTL(newLine.id, 'not a movement line');
@@ -151,6 +159,20 @@
       }
       return null;
     }
+
+    /* real click-to-edit on a TL line (regression: lineToEdit) */
+    var lineEl = document.querySelector('#tl-container .tl-line .tl-text').parentElement;
+    lineEl.click();
+    var tin = lineEl.querySelector('input');
+    ok('clicking a TL line opens an editor', !!tin);
+    if (tin) { tin.value = tin.value; tin.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); }
+
+    /* real UI edit in the ICRF grid leaves exactly one row per id */
+    A.setSrc('icrf');
+    var td = document.querySelector('#icrf-container tr[data-id="i9"] td[data-key="from"]');
+    td.click(); td.querySelector('input').value = 'ONCE ONLY'; td.querySelector('input').blur();
+    var same = A.state.entries.filter(function (e) { return e.id === 'i9'; });
+    ok('UI edit never duplicates a row', same.length === 1 && same[0].from === 'ONCE ONLY', same.length);
 
     /* ---------- reset edits restores parsed data ---------- */
     A.resetEdits();

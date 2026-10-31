@@ -141,7 +141,7 @@
       input.addEventListener('blur', function () { commit(); });
 
       function commit() {
-        if (!state.editing) return;
+        if (!state.editing || state.editing.input !== input) return;
         state.editing = null;
         var res = opts.commit(id, key, input.value.trim());
         drawBody();
@@ -299,10 +299,10 @@
           drawBody();
         }
       });
-      input.addEventListener('blur', function () { if (state.editing) commit(); });
+      input.addEventListener('blur', function () { commit(); });
 
       function commit() {
-        if (!state.editing) return;
+        if (!state.editing || state.editing.input !== input) return;
         state.editing = null;
         var txt = input.value.trim();
         if (!txt && info.isNew) { opts.delLine(id); drawBody(); return; }
