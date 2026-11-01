@@ -1,0 +1,17 @@
+# One-click deploy on Render (https://render.com): New → Blueprint → pick this repo.
+# A persistent disk is what keeps your edits across restarts and deploys.
+services:
+  - type: web
+    name: tcrs
+    runtime: docker
+    plan: starter
+    healthCheckPath: /healthz
+    disk:
+      name: tcrs-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: TCRS_PASSWORD
+        sync: false          # you are asked for it in the dashboard — never commit it
+      - key: TCRS_TRUST_PROXY
+        value: "1"

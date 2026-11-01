@@ -4,16 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>TCRS · School 4 Combined Movement Builder</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%234c8dff'/%3E%3Cstop offset='1' stop-color='%23123a63'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='16' fill='url(%23g)'/%3E%3Ctext x='32' y='43' font-family='Helvetica' font-size='25' font-weight='bold' fill='white' text-anchor='middle'%3ES4%3C/text%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23c9c1f5'/%3E%3Cstop offset='1' stop-color='%23a9d8ec'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='16' fill='url(%23g)'/%3E%3Ctext x='32' y='43' font-family='Helvetica' font-size='25' font-weight='bold' fill='%232b2560' text-anchor='middle'%3ES4%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
-<div class="bgwash" aria-hidden="true">
-  <div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div>
-</div>
-
-<header class="topbar glass">
+<header class="topbar">
   <div class="topbar-inner">
     <div class="brand">
       <div class="mark">S4</div>
@@ -35,7 +31,8 @@
     </nav>
 
     <div class="topbtns">
-      <button class="btn glass-btn" id="btn-sample" title="Load the two bundled sample workbooks">
+      <span class="sync-pill" id="sync-pill" title="" hidden><i></i><span id="sync-text"></span></span>
+      <button class="btn btn-soft" id="btn-sample" title="Load the two bundled sample workbooks">
         <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/></svg>
         Samples
       </button>
@@ -43,9 +40,13 @@
         <svg viewBox="0 0 24 24"><path d="M5 20h14v-2H5v2zM19 9h-4V3H9v6H5l7 7 7-7z"/></svg>
         Export .xlsx
       </button>
-      <button class="btn glass-btn" id="btn-print" disabled title="Print the schedule view">
+      <button class="btn btn-soft" id="btn-print" disabled title="Print the schedule view">
         <svg viewBox="0 0 24 24"><path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/></svg>
         Print
+      </button>
+      <button class="btn btn-soft" id="btn-logout" title="Sign out of this browser" hidden>
+        <svg viewBox="0 0 24 24"><path d="M10 17l1.4-1.4L8.8 13H20v-2H8.8l2.6-2.6L10 7l-5 5 5 5zM4 5h8V3H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8v-2H4V5z"/></svg>
+        Sign out
       </button>
     </div>
   </div>
@@ -56,9 +57,9 @@
   <aside class="rail">
 
     <div class="step-label"><span class="num">1</span> Source files</div>
-    <div class="glass-card" id="card-files" style="padding:14px 14px 15px">
+    <div class="card" id="card-files" style="padding:14px 14px 15px">
 
-      <div class="upcard glass-inset" id="up-icrf">
+      <div class="upcard inset" id="up-icrf">
         <label class="upzone" for="file-icrf">
           <input type="file" id="file-icrf" accept=".xlsx,.xlsm">
           <div class="row">
@@ -72,7 +73,7 @@
         <div class="upstatus" id="icrf-status" hidden></div>
       </div>
 
-      <div class="upcard glass-inset" id="up-tl">
+      <div class="upcard inset" id="up-tl">
         <label class="upzone" for="file-tl">
           <input type="file" id="file-tl" accept=".xlsx,.xlsm">
           <div class="row">
@@ -89,8 +90,8 @@
     </div>
 
     <div class="step-label"><span class="num">2</span> Combine options</div>
-    <div class="glass-card optcard" id="card-opts">
-      <div class="monthbanner glass-inset" id="month-banner" hidden>
+    <div class="card optcard" id="card-opts">
+      <div class="monthbanner inset" id="month-banner" hidden>
         <div class="cal">
           <div class="top" id="mb-top">NOV</div>
           <div class="day" id="mb-day">·</div>
@@ -126,22 +127,22 @@
         <span>Show POC / contacts<span class="sub">Off = omitted on screen and in export</span></span>
       </label>
 
-      <div class="acc glass-inset" id="acc-fixes">
+      <div class="acc inset" id="acc-fixes">
         <div class="acc-head"><span>Date fixes applied</span><span class="caro">▸</span><span class="n" id="fix-count">0</span></div>
         <div class="acc-body"><div id="fix-list"></div></div>
       </div>
-      <div class="acc glass-inset" id="acc-skip">
+      <div class="acc inset" id="acc-skip">
         <div class="acc-head"><span>Rows treated as headings</span><span class="caro">▸</span><span class="n" id="skip-count">0</span></div>
         <div class="acc-body"><div id="skip-list"></div></div>
       </div>
-      <div class="acc glass-inset" id="acc-unmatched">
+      <div class="acc inset" id="acc-unmatched">
         <div class="acc-head"><span>Unparsed Troop Lift lines</span><span class="caro">▸</span><span class="n" id="unmatch-count">0</span></div>
         <div class="acc-body"><div id="unmatch-list"></div></div>
       </div>
     </div>
 
     <div class="step-label"><span class="num">3</span> Output</div>
-    <div class="glass-card optcard">
+    <div class="card optcard">
       <p class="hintline" style="margin:0">
         <b>Export</b> writes <b style="color:var(--accent)">By Date</b> + <b style="color:var(--accent)">By Company</b> sheets from
         whatever is on screen right now — including your <b>Live sheet</b> edits.
@@ -157,7 +158,7 @@
     <!-- ============================ SCHEDULE PANEL -->
     <div id="panel-schedule">
 
-      <div class="empty glass" id="empty-state">
+      <div class="empty card" id="empty-state">
         <div class="empty-eyebrow">TWO FILES IN → ONE SCHEDULE OUT</div>
         <h2>Combine School 4 vehicles with troop-lift buses</h2>
         <p class="empty-sub">
@@ -167,17 +168,17 @@
           <b>Live sheet</b> tab.
         </p>
         <div class="pipe">
-          <div class="pipenode glass-inset">
+          <div class="pipenode inset">
             <div class="pn-icon pn-icrf">ICRF</div>
             <div class="pn-t">ICRF sheet</div>
             <div class="pn-d">School 4's own vehicles — LUV, 5-Ton GS, SOUV — with times, routes &amp; POCs</div>
           </div>
-          <div class="pipenode glass-inset">
+          <div class="pipenode inset">
             <div class="pn-icon pn-tl">TL</div>
             <div class="pn-t">Troop Lift sheet</div>
             <div class="pn-d">All units' buses &amp; tonners; School 4 companies extracted from the day lines</div>
           </div>
-          <div class="pipenode glass-inset">
+          <div class="pipenode inset">
             <div class="pn-icon pn-out">S4</div>
             <div class="pn-t">Combined schedule</div>
             <div class="pn-d">One month, School 4 only — by date or by company, printable &amp; exportable</div>
@@ -208,7 +209,7 @@
 
     <!-- ============================ LIVE SHEET PANEL -->
     <div id="panel-grid" style="display:none">
-      <div class="sheet-panel glass" id="sheet-panel">
+      <div class="sheet-panel card" id="sheet-panel">
 
         <div class="sheet-blank" id="sheet-blank">
           <div class="empty-eyebrow">LIVE SHEET</div>
@@ -230,12 +231,11 @@
             <button id="btn-src-tl">Troop lift · lines</button>
           </div>
           <div class="sheet-tools">
-            <div class="searchwrap glass-inset">
+            <div class="searchwrap inset">
               <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.7.7l.27.28v.79l5 4.99L20.49 19zm-6 0A4.5 4.5 0 1 1 14 9.5 4.5 4.5 0 0 1 9.5 14z"/></svg>
               <input id="grid-search" type="text" placeholder="Search…" spellcheck="false">
             </div>
-            <span class="save-pill" id="save-pill"></span>
-            <button class="btn glass-btn sm" id="grid-discard" title="Throw away your saved edits and restore the freshly parsed data">Reset edits</button>
+            <button class="btn btn-soft sm" id="grid-discard" title="Throw away your saved edits and restore the freshly parsed data">Reset edits</button>
           </div>
         </div>
 

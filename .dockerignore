@@ -1,0 +1,6 @@
+.git
+data
+dist
+tests
+*.xlsx
+reference_parse.py

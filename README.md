@@ -5,7 +5,8 @@ A single-page website that combines one month of **School 4 vehicle data** with
 
 Two source workbooks in, one School 4 schedule out — grouped **by date** or
 **by company**, fully editable in a **Live sheet**, and exportable as a
-formatted Excel workbook. Glass-morphic UI; everything runs offline.
+formatted Excel workbook. Clean pastel UI. Runs password-protected on a small server that
+remembers your work, or fully offline from any static server.
 
 ```
                            ┌────────────────┐      ┌────────────────┐
@@ -30,16 +31,59 @@ formatted Excel workbook. Glass-morphic UI; everything runs offline.
                           └──────────────────────────────────────┘
 ```
 
-Everything runs **entirely in the browser** — neither file is ever uploaded.
+Parsing and editing happen **in the browser**. When you run it with `server.py`
+(below) your workbooks and edits are also stored on *your* server so they're still
+there next time; without it, nothing leaves the device.
 
-## Usage
+## Run it (password-protected, remembers your edits)
 
-Any static server works (needed for the *Load sample data* button; manual
-drag-and-drop works without one, e.g. straight from `file://`):
+```bash
+TCRS_PASSWORD='a long passphrase' python3 server.py
+# open http://127.0.0.1:8000 and sign in
+```
+
+Python 3.9+ standard library only — nothing to install. Everything, including the
+site itself, sits behind the password. Options (environment variables):
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `TCRS_PASSWORD` | *(required, ≥ 6 chars)* | The shared password |
+| `PORT` / `HOST` | `8000` / `127.0.0.1` | Use `HOST=0.0.0.0` to listen on all interfaces |
+| `TCRS_DATA_DIR` | `./data` | Where `state.json` (your work) is kept — back this up |
+| `TCRS_TRUST_PROXY` | off | Set `1` behind a reverse proxy / PaaS (real client IP, HTTPS cookies) |
+| `TCRS_SESSION_DAYS` | `30` | How long a sign-in lasts |
+| `TCRS_SECRET` | generated | Cookie-signing secret (otherwise created in the data dir) |
+
+### Putting it on the internet
+
+The server speaks plain HTTP, so publish it **behind HTTPS** — the easy way is a host
+that terminates TLS for you and gives the app a persistent disk:
+
+- **Render:** *New → Blueprint*, pick this repo (`render.yaml` is included — it mounts a
+  1 GB disk at `/data`). Enter `TCRS_PASSWORD` when asked.
+- **Docker anywhere (Fly.io, Railway, a VPS behind Caddy/nginx):**
+  ```bash
+  docker build -t tcrs .
+  docker run -d -p 8000:8000 -e TCRS_PASSWORD='…' -e TCRS_TRUST_PROXY=1 -v tcrs-data:/data tcrs
+  ```
+- **Quick share from your own machine:** run `server.py`, then expose port 8000 with a
+  tunnel such as `cloudflared tunnel --url http://localhost:8000`.
+
+Without a persistent disk the host wipes `state.json` on every redeploy — that is the
+one thing that would lose your edits.
+
+**Security model:** one shared password → a signed, `HttpOnly`, `SameSite=Lax` session
+cookie. Wrong guesses are slowed down and locked out after 5 tries per 5 minutes per IP.
+Only the site's own files are served (never `server.py`, `data/`, or the repo). Pick a
+long passphrase; anyone who has it can read and change the schedule.
+
+### Static-only mode
+
+Any static server also works (needed just for the *Samples* button; drag-and-drop works
+even from `file://`). Edits then persist in this browser's `localStorage` only:
 
 ```bash
 python3 -m http.server 8000
-# open http://localhost:8000
 ```
 
 Two tabs share one authoritative dataset:
@@ -71,11 +115,21 @@ append new ones. Invalid values are rejected inline with a reason (dates
 Editing an ICRF **start date** shifts the end date too, so multi-day movements
 keep their span (`+3d` is recalculated).
 
-**Storage** — changes auto-save to `localStorage` under
-`tcrs:v3:<month>-<year>` and are restored the next time the same month is
-combined (the save pill shows the restore time). Everything stays on your
-device; nothing syncs. **Reset edits** restores the freshly parsed data
-(snapshot kept at parse time).
+**Storage** — every change auto-saves (the pill in the top bar shows *Saving… /
+Saved · 14:32*). Close the tab, come back tomorrow, or open it on another device and
+sign in: the two workbooks, every edit, and your view settings (tab, grouping, company
+filters, POC toggle) reopen exactly as you left them — no re-uploading.
+
+- With `server.py` the state is written to `data/state.json` (one record per month,
+  with a rolling `state.json.bak`). A copy is also cached in `localStorage`
+  (`tcrs:v3:<month>-<year>`), so edits made while the server is unreachable are kept
+  and pushed up as soon as it's back — the newest copy wins when you reopen.
+- If two devices edit at once, the second one to save is told
+  *Changed elsewhere — click to reload* instead of silently overwriting the first.
+- **Remove** on a source file unloads it for good (it won't reappear on reload); edits
+  stay stored and return when the same month is loaded again.
+- **Reset edits** restores the freshly parsed data (snapshot kept at parse time) and
+  forgets the saved edits.
 
 The Schedule tab and the `.xlsx` export are generated from the live sheet's
 current state — manual and edited rows are marked in the export's Data notes
@@ -126,11 +180,14 @@ Handled automatically — and reported on the **Data notes** export sheet:
 
 | Path | Purpose |
 | --- | --- |
+| `server.py` | Password gate + static files + `/api/state` persistence (stdlib only) |
+| `login.html/.css/.js` | The pastel sign-in page |
 | `index.html`, `styles.css`, `app.js` | The site (UI, tabs, Excel export, persistence) |
 | `sheet.js` | Editable live-sheet grid (no third-party grid library) |
 | `parser.js` | Pure parsing/merge logic — no DOM, reusable |
 | `vendor/exceljs.min.js` | Vendored ExcelJS 4.4.0 (offline, no CDN) |
-| `dist/` | Deployment copy — site files only, no samples or tests |
+| `Dockerfile`, `render.yaml` | Deployment recipes |
+| `dist/` | Static-hosting copy of the site files (no server, no samples or tests) |
 | `samples/` | The two reference workbooks (copied from the repo root) |
 | `tests/test.html` | 28 parser assertions (reference values) |
 | `tests/smoke.html` | UI + live-sheet + export read-back smoke test |
@@ -146,6 +203,7 @@ Useful as demo bookmarks after combining.
 ## Tests
 
 ```bash
+python3 tests/server_test.py             # password gate, no file leaks, persistence, conflicts
 CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 "$CHROME" --headless=new --allow-file-access-from-files --dump-dom \
   "file://$(pwd)/tests/test.html"        # 28 parser tests
@@ -157,8 +215,6 @@ CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 
 - Vehicle naming keeps the source casing (`5-Ton GS`); counts render as `4× BUSES` / `LUV ×1`.
 - Export keeps times as **text** so leading zeros (`0545`) survive Excel.
-- Sticky section headers use `backdrop-filter`; headless-screenshot captures may
-  show ghost rows inside them (a known compositor artifact), real browsers render them correctly.
 - Ideas: attach-number summary per day, route preset dictionary, drag-and-drop of
   both files at once, month selector when workbooks contain several sheets,
   CSV/Google-Sheets paste-in for the live sheet.

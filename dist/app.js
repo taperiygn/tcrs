@@ -23,27 +23,30 @@
     schwide: true,
     onlyS4: true,
     poc: true,
+    touched: false,         // true once there is anything worth keeping beyond the parsed files
+    files: { icrf: null, tl: null },   // {name, b64} — kept so the workspace reopens without re-uploading
     icrfGrid: null, tlGrid: null
   };
 
-  var COY_COLORS = {
-    '1ST': ['#8a6d3b', '#f2ecdf'],
-    '2ND': ['#5d6b8a', '#e9edf4'],
-    '3RD': ['#b26a00', '#f9ecd9'],
-    '4TH': ['#b3403c', '#f9e9e7'],
-    '5TH': ['#2e7d32', '#e7f2e7'],
-    '6TH': ['#1565c0', '#e8f1fa'],
-    '7TH': ['#6a4fa3', '#f0ebf8'],
-    '8TH': ['#7a5546', '#f2e8e3'],
-    'SCHWIDE': ['#455a64', '#eceff1']
+  var COY_COLORS = {            // [text, pastel fill]
+    '1ST': ['#86650f', '#fcf3d3'],
+    '2ND': ['#4f5f8a', '#e3e8f6'],
+    '3RD': ['#a9582f', '#fde9dd'],
+    '4TH': ['#ad4660', '#fbe1e7'],
+    '5TH': ['#2c7557', '#dff4ea'],
+    '6TH': ['#35698f', '#dcedfa'],
+    '7TH': ['#5a4fb8', '#e8e4fb'],
+    '8TH': ['#8a5470', '#f6e2ee'],
+    'SCHWIDE': ['#56606e', '#e8ebf0']
   };
   function coyStyle(c) {
     var p = COY_COLORS[c];
-    if (!p) return { cc: '#16324a', cb: '#eef2f7' };
+    if (!p) return { cc: '#56606e', cb: '#e8ebf0' };
     return { cc: p[0], cb: p[1] };
   }
 
   var $ = function (id) { return document.getElementById(id); };
+  window.TCRSCoyStyle = coyStyle;
 
   /* ----------------------------------------------------------- toast -- */
   var toastTimer = null;
@@ -73,49 +76,201 @@
   }
 
   /* ------------------------------------------------------ persistence -- */
+  /* Edits are kept in three places, newest wins on open:
+       1. the server (/api/state) — survives closing the browser, shared across devices
+       2. localStorage            — instant, and the fallback when the server is unreachable
+     The two source workbooks are stored next to the edits, so reopening the site
+     brings the whole workspace back without uploading anything again. */
   var STORE_PREFIX = 'tcrs:v3:';
-  function storeKey() {
-    return STORE_PREFIX + state.model.month + '-' + state.model.year;
-  }
+  var FILES_PREFIX = 'tcrs:files:';
+  var LAST_KEY = 'tcrs:last';
+  function monthKey() { return state.model.month + '-' + state.model.year; }
+  function storeKey() { return STORE_PREFIX + monthKey(); }
+
+  var remote = {
+    online: false,          // server reachable and signed in
+    doc: null,              // last /api/state response
+    revs: {},               // month key → revision we last saw (optimistic concurrency)
+    filesDirty: false,      // workbooks not yet sent to the server
+    localFilesDirty: false, // workbooks not yet cached locally
+    conflict: false         // another device saved first — stop overwriting it
+  };
   var saveTimer = null, savePending = false;
-  function saveStore() {            // debounced — heavy JSON write happens after a pause
+
+  function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } }
+  function lsDel(k) { try { localStorage.removeItem(k); } catch (e) { } }
+
+  function currentOpts() {
+    return {
+      coys: state.coys, schwide: state.schwide, onlyS4: state.onlyS4, poc: state.poc,
+      view: state.view, tab: state.tab, srcTab: state.srcTab
+    };
+  }
+  function applyOpts(o) {
+    if (!o || typeof o !== 'object') return;
+    if (o.coys && typeof o.coys === 'object') {
+      Object.keys(state.coys).forEach(function (c) { if (c in o.coys) state.coys[c] = !!o.coys[c]; });
+    }
+    ['schwide', 'onlyS4', 'poc'].forEach(function (k) { if (typeof o[k] === 'boolean') state[k] = o[k]; });
+    if (o.view === 'date' || o.view === 'coy') state.view = o.view;
+    if (o.srcTab === 'icrf' || o.srcTab === 'tl') state.srcTab = o.srcTab;
+    if (o.tab === 'schedule' || o.tab === 'grid') state.tab = o.tab;
+  }
+  function syncControls() {
+    $('opt-schwide').checked = state.schwide;
+    $('opt-onlys4').checked = state.onlyS4;
+    $('opt-poc').checked = state.poc;
+    $('opt-poc-inline').checked = state.poc;
+    $('view-date').classList.toggle('on', state.view === 'date');
+    $('view-coy').classList.toggle('on', state.view === 'coy');
+  }
+
+  /* -- sync pill (top bar) -- */
+  var sync = { kind: '', text: '' };
+  function setSync(kind, text, title) {
+    sync = { kind: kind, text: text };
+    var p = $('sync-pill');
+    if (!state.model) { p.hidden = true; return; }
+    p.hidden = false;
+    p.className = 'sync-pill ' + kind;
+    p.title = title || '';
+    $('sync-text').textContent = text;
+  }
+  function clockTime(iso) {
+    var d = iso ? new Date(iso) : new Date();
+    if (isNaN(d)) return '';
+    var t = d.toTimeString().slice(0, 5);
+    return d.toDateString() === new Date().toDateString() ? t : d.toLocaleDateString() + ' ' + t;
+  }
+  function updateSavePill() {
+    if (!state.model) { $('sync-pill').hidden = true; return; }
+    if (sync.text) { setSync(sync.kind, sync.text, $('sync-pill').title); return; }
+    if (remote.online) {
+      setSync('ok', state.restoredAt ? 'Restored · saved ' + clockTime(state.restoredAt) : 'Auto-saves to the server');
+    } else {
+      setSync('local', state.restoredAt ? 'Restored · saved ' + clockTime(state.restoredAt) : 'Auto-saves on this device');
+    }
+  }
+
+  /* -- base64 <-> ArrayBuffer (workbooks travel inside the JSON state) -- */
+  function bufToB64(buf) {
+    var bytes = new Uint8Array(buf), out = '';
+    for (var i = 0; i < bytes.length; i += 0x8000) {
+      out += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    }
+    return btoa(out);
+  }
+  function b64ToBuf(b64) {
+    var bin = atob(b64), bytes = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return bytes.buffer;
+  }
+  function rememberFile(which, name, buf) {
+    state.files[which] = { name: name, b64: bufToB64(buf) };
+    remote.filesDirty = true;
+    remote.localFilesDirty = true;
+  }
+
+  /* -- saving -- */
+  function saveStore(optsOnly) {    // debounced — heavy JSON write happens after a pause
     if (!state.model) return;
+    if (!optsOnly) state.touched = true;
     savePending = true;
     clearTimeout(saveTimer);
     saveTimer = setTimeout(flushSave, 700);
-    var pill = $('save-pill');
-    pill.classList.add('show');
-    pill.textContent = 'saving…';
+    if (!remote.conflict) setSync('busy', 'Saving…');
   }
-  function flushSave() {
+  function editsPayload() {         // null = nothing edited, the parsed workbooks are the truth
+    if (!state.touched) return null;
+    return {
+      updatedAt: new Date().toISOString(),
+      entries: state.entries, tlLines: state.tlLines, skipped: state.skipped
+    };
+  }
+  function flushSave(keepalive) {
     clearTimeout(saveTimer);
     if (!savePending || !state.model) return;
     savePending = false;
-    try {
-      localStorage.setItem(storeKey(), JSON.stringify({
-        v: 3, at: Date.now(),
-        updatedAt: new Date().toISOString(),
-        entries: state.entries,
-        tlLines: state.tlLines,
-        skipped: state.skipped
-      }));
-      $('save-pill').classList.remove('unsaved');
-      $('save-pill').textContent = 'saved on this device';
-    } catch (e) { /* storage full/unavailable */ }
+    var e = editsPayload() || { updatedAt: new Date().toISOString(), entries: [], tlLines: [], skipped: [] };
+    var o = currentOpts(), key = monthKey();
+    var okLocal = lsSet(STORE_PREFIX + key, JSON.stringify({
+      v: 3, at: Date.now(), updatedAt: e.updatedAt,
+      entries: e.entries, tlLines: e.tlLines, skipped: e.skipped, opts: o
+    }));
+    if (remote.localFilesDirty && state.files.icrf && state.files.tl) {
+      if (lsSet(FILES_PREFIX + key, JSON.stringify(state.files))) remote.localFilesDirty = false;
+    }
+    lsSet(LAST_KEY, key);
+    if (remote.online) pushRemote(keepalive === true);
+    else setSync('local', okLocal ? 'Saved on this device' : 'Not saved — storage unavailable');
   }
-  function loadStore() {
+
+  var pushing = false, pushAgain = false;
+  async function pushRemote(keepalive) {
+    if (!remote.online || remote.conflict || !state.model) return;
+    if (pushing) { pushAgain = true; return; }
+    pushing = true;
     try {
-      var raw = localStorage.getItem(storeKey());
-      if (!raw) return null;
-      var d = JSON.parse(raw);
-      if (d && d.v === 3 && Array.isArray(d.entries) && d.entries.length) {
-        return d;
-      }
+      do {
+        pushAgain = false;
+        var key = monthKey();
+        var body = { baseRev: remote.revs[key] || 0, edits: editsPayload(), opts: currentOpts() };
+        var sendingFiles = remote.filesDirty && state.files.icrf && state.files.tl;
+        if (sendingFiles) body.files = state.files;
+        var json = JSON.stringify(body);
+        var r = await fetch('/api/state/' + encodeURIComponent(key), {
+          method: 'PUT', credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', 'X-TCRS': '1' },
+          body: json, keepalive: !!keepalive && json.length < 60000
+        });
+        if (r.status === 401) { location.href = '/login'; return; }
+        if (r.status === 409) {
+          remote.conflict = true;
+          setSync('err', 'Changed elsewhere — click to reload', 'Another device saved newer edits. Reload to load them; this tab will not overwrite them.');
+          toast('Someone saved newer edits from another device. <b>Reload the page</b> to pick them up — this tab has stopped saving so nothing is overwritten.', true);
+          return;
+        }
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        var d = await r.json();
+        remote.revs[key] = d.rev;
+        if (sendingFiles) remote.filesDirty = false;
+      } while (pushAgain);
+      setSync('ok', 'Saved · ' + clockTime(), 'Stored on the server — reopen the site any time.');
+    } catch (err) {
+      setSync('local', 'Saved on this device — server unreachable', 'Will retry on your next edit.');
+      savePending = true;                     // retry on next change / reconnect
+    } finally {
+      pushing = false;
+    }
+  }
+
+  /* -- loading -- */
+  function readLocal(key) {
+    try {
+      var d = JSON.parse(lsGet(STORE_PREFIX + key) || 'null');
+      if (d && d.v === 3 && Array.isArray(d.entries)) { d.hasEdits = d.entries.length > 0; return d; }
     } catch (e) { }
     return null;
   }
+  function readRemote(key) {
+    var rec = remote.doc && remote.doc.months && remote.doc.months[key];
+    if (!rec) return null;
+    var ed = rec.edits, has = !!(ed && Array.isArray(ed.entries) && ed.entries.length);
+    return {
+      v: 3, hasEdits: has, updatedAt: (ed && ed.updatedAt) || rec.savedAt,
+      entries: has ? ed.entries : [], tlLines: has ? ed.tlLines : [], skipped: has ? ed.skipped : [],
+      opts: rec.opts, _remote: true
+    };
+  }
+  function loadStore() {            // newest of server vs this device
+    var key = monthKey();
+    var a = readRemote(key), b = readLocal(key);
+    if (a && b) return String(b.updatedAt || '') > String(a.updatedAt || '') ? b : a;
+    return a || b;
+  }
   function discardStore(silent) {
-    if (state.model) { try { localStorage.removeItem(storeKey()); } catch (e) { } }
+    if (state.model) { lsDel(storeKey()); }
     state.restoredAt = null;
     if (!silent) toast('Restored the freshly parsed data.', false);
   }
@@ -129,6 +284,8 @@
     normalizeTLLines();
     changed();
     rerenderSrc();
+    state.touched = false;
+    saveStore(true);                // forgets the edits on the server too
     toast('Restored the freshly parsed data.', false);
   }
 
@@ -180,6 +337,7 @@
     try {
       var buf = await file.arrayBuffer();
       var wb = await loadWorkbook(buf);
+      rememberFile(which, file.name, buf);
       if (which === 'icrf') {
         state.icrfWb = wb; state.icrfName = file.name;
         renderUploadStatus('icrf', { ok: true, msg: 'loaded' });
@@ -208,7 +366,26 @@
     }
   }
 
+  /* Removing a workbook unloads it for good (it won't reappear on reload); the edits
+     stay stored, and come back if the same month is combined again. */
+  function forgetFiles(key) {
+    lsDel(FILES_PREFIX + key);
+    lsDel(LAST_KEY);
+    if (remote.online && !remote.conflict) {
+      fetch('/api/state/' + encodeURIComponent(key), {
+        method: 'PUT', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-TCRS': '1' },
+        body: JSON.stringify({ baseRev: remote.revs[key] || 0, files: null })
+      }).then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) { if (d) remote.revs[key] = d.rev; }).catch(function () { });
+    }
+  }
+
   function clearFile(which) {
+    var hadKey = state.model ? monthKey() : null;
+    state.files[which] = null;
+    remote.filesDirty = remote.localFilesDirty = false;
+    if (hadKey) forgetFiles(hadKey);
     if (which === 'icrf') { state.icrfWb = null; state.icrfName = ''; $('file-icrf').value = ''; }
     else { state.tlWb = null; state.tlName = ''; $('file-tl').value = ''; }
     var box = $(which === 'icrf' ? 'icrf-status' : 'tl-status');
@@ -237,7 +414,8 @@
     }
 
     if (!model) {
-      state.model = null; state.entries = []; state.restoredAt = null;
+      state.model = null; state.entries = []; state.restoredAt = null; state.touched = false;
+      $('sync-pill').hidden = true;
       state.tlLines = []; state.skipped = [];
       $('results').hidden = true;
       $('empty-state').hidden = false;
@@ -258,7 +436,10 @@
 
     // restore saved edits for this month if present
     var saved = loadStore();
-    if (saved) {
+    applyOpts(saved && saved.opts);
+    var hadEdits = !!(saved && saved.hasEdits);
+    state.touched = hadEdits;
+    if (hadEdits) {
       state.entries = saved.entries;
       state.tlLines = Array.isArray(saved.tlLines) && saved.tlLines.length
         ? saved.tlLines : JSON.parse(JSON.stringify(model.tlLines));
@@ -272,6 +453,17 @@
       state.restoredAt = null;
     }
 
+    // companies added by manual rows in an earlier session
+    state.entries.forEach(function (e) {
+      (e.coys || []).forEach(function (c) {
+        if (c !== 'SCHWIDE' && model.companies.indexOf(c) === -1) {
+          model.companies.push(c);
+          if (!(c in state.coys)) state.coys[c] = true;
+        }
+      });
+    });
+    model.companies = T.sortCoys(model.companies);
+
     // pristine snapshot ("Reset edits") — plain copy, order preserved as parsed
     state.pristine = JSON.parse(JSON.stringify({
       entries: model.entries, tlLines: model.tlLines, skipped: model.icrfSkipped
@@ -280,6 +472,7 @@
     // line ids (used by the live sheet and manual lines)
     normalizeTLLines();
 
+    syncControls();
     renderMonthBanner();
     renderChips();
     renderNotes();
@@ -289,10 +482,15 @@
     $('btn-export').disabled = false;
     $('btn-print').disabled = false;
     setSrc(state.srcTab);
+    setTab(state.tab);
+    sync = { kind: '', text: '' };
+    updateSavePill();
+    if (!saved || !saved._remote || remote.filesDirty || remote.localFilesDirty ||
+        remote.revs[monthKey()] === undefined) saveStore(true);
 
     var s = statsFor(filteredEntries());
     toast('<b>Combined.</b> ' + s.movements + ' movements over ' + s.days + ' days.' +
-      (saved ? ' Your previous edits were restored.' : ''));
+      (hadEdits ? ' Your previous edits were restored.' : ''));
   }
 
   /* ----------------------------------------------------- entry store -- */
@@ -777,17 +975,6 @@
     updateSavePill();
   }
 
-  function updateSavePill() {
-    var pill = $('save-pill');
-    if (!state.model) { pill.textContent = ''; return; }
-    pill.classList.add('show');
-    if (state.restoredAt) {
-      pill.textContent = 'edits restored — saved ' + String(state.restoredAt).slice(0, 16).replace('T', ' ');
-    } else {
-      pill.textContent = 'edits auto-save on this device';
-    }
-  }
-
   function renderMonthBanner() {
     var m = state.model;
     if (!m) { $('month-banner').hidden = true; return; }
@@ -827,6 +1014,7 @@
         if (c === 'SCHWIDE') state.schwide = b.classList.contains('on');
         else state.coys[c] = b.classList.contains('on');
         refreshDerived();
+        saveStore(true);
       });
       box.appendChild(b);
     });
@@ -1021,7 +1209,7 @@
         c.appendChild(sec);
       });
       if (!any) {
-        c.innerHTML = '<div class="empty"><h2 style="margin:0;color:var(--navy)">No movements match the current filters</h2>' +
+        c.innerHTML = '<div class="empty"><h2 style="margin:0;color:var(--ink)">No movements match the current filters</h2>' +
           '<p class="hintline">Try enabling more companies, or turning “Keep only School 4 movements” off.</p></div>';
       }
     }
@@ -1235,28 +1423,30 @@
     });
 
     // tabs
-    $('btn-tab-schedule').addEventListener('click', function () { setTab('schedule'); });
-    $('btn-tab-grid').addEventListener('click', function () { setTab('grid'); });
+    $('btn-tab-schedule').addEventListener('click', function () { setTab('schedule'); saveStore(true); });
+    $('btn-tab-grid').addEventListener('click', function () { setTab('grid'); saveStore(true); });
 
     // live-sheet sub-tabs
-    $('btn-src-icrf').addEventListener('click', function () { setSrc('icrf'); });
-    $('btn-src-tl').addEventListener('click', function () { setSrc('tl'); });
+    $('btn-src-icrf').addEventListener('click', function () { setSrc('icrf'); saveStore(true); });
+    $('btn-src-tl').addEventListener('click', function () { setSrc('tl'); saveStore(true); });
 
     // schedule view
-    $('view-date').addEventListener('click', function () { state.view = 'date'; refreshDerived(); });
-    $('view-coy').addEventListener('click', function () { state.view = 'coy'; refreshDerived(); });
+    $('view-date').addEventListener('click', function () { state.view = 'date'; syncControls(); refreshDerived(); saveStore(true); });
+    $('view-coy').addEventListener('click', function () { state.view = 'coy'; syncControls(); refreshDerived(); saveStore(true); });
 
-    $('opt-schwide').addEventListener('change', function (e) { state.schwide = e.target.checked; refresh(); });
-    $('opt-onlys4').addEventListener('change', function (e) { state.onlyS4 = e.target.checked; refresh(); });
+    $('opt-schwide').addEventListener('change', function (e) { state.schwide = e.target.checked; refresh(); saveStore(true); });
+    $('opt-onlys4').addEventListener('change', function (e) { state.onlyS4 = e.target.checked; refresh(); saveStore(true); });
     $('opt-poc').addEventListener('change', function (e) {
       state.poc = e.target.checked;
       $('opt-poc-inline').checked = e.target.checked;
       refreshDerived();
+      saveStore(true);
     });
     $('opt-poc-inline').addEventListener('change', function (e) {
       state.poc = e.target.checked;
       $('opt-poc').checked = e.target.checked;
       refreshDerived();
+      saveStore(true);
     });
 
     $('grid-search').addEventListener('input', function (e) { applySearch(); });
@@ -1283,8 +1473,15 @@
 
     $('btn-export').addEventListener('click', exportXlsx);
     $('btn-print').addEventListener('click', function () { flushSchedule(); window.print(); });
-    window.addEventListener('beforeunload', flushSave);
-    document.addEventListener('visibilitychange', function () { if (document.hidden) flushSave(); });
+    window.addEventListener('beforeunload', function () { flushSave(true); });
+    document.addEventListener('visibilitychange', function () { if (document.hidden) flushSave(true); });
+    window.addEventListener('online', function () { if (state.model) { savePending = true; flushSave(); } });
+    $('sync-pill').addEventListener('click', function () { if (remote.conflict) location.reload(); });
+    $('btn-logout').addEventListener('click', async function () {
+      flushSave();
+      try { await fetch('/api/logout', { method: 'POST', credentials: 'same-origin', headers: { 'X-TCRS': '1' } }); } catch (e) { }
+      location.href = '/login';
+    });
 
     $('btn-sample').addEventListener('click', async function () {
       try {
@@ -1294,6 +1491,8 @@
         var ab = await a.arrayBuffer(); var bb = await b.arrayBuffer();
         state.icrfWb = await loadWorkbook(ab); state.icrfName = 'ICRF.xlsx (sample)';
         state.tlWb = await loadWorkbook(bb); state.tlName = 'Troop Lift Sample.xlsx (sample)';
+        rememberFile('icrf', state.icrfName, ab);
+        rememberFile('tl', state.tlName, bb);
         renderUploadStatus('icrf', { ok: true, msg: 'sample workbook — ' + state.icrfWb.worksheets[0].name });
         renderUploadStatus('tl', { ok: true, msg: 'sample workbook — ' + state.tlWb.worksheets[0].name });
         maybeCombine();
@@ -1319,6 +1518,52 @@
 
   init();
   setTab(state.tab);   // sync visibility with the (possibly hash-set) tab
+  syncControls();
+
+  /* Reopen the workspace: ask the server (or, failing that, this device) what was open last. */
+  async function bootRestore() {
+    var auto = /^#auto/.test(location.hash);
+    if (location.protocol === 'http:' || location.protocol === 'https:') {
+      try {
+        var r = await fetch('/api/state', { credentials: 'same-origin', headers: { 'X-TCRS': '1' } });
+        if (r.status === 401) { location.href = '/login'; return; }
+        if (r.ok) {
+          remote.doc = await r.json();
+          remote.online = true;
+          Object.keys(remote.doc.months || {}).forEach(function (k) { remote.revs[k] = remote.doc.months[k].rev || 0; });
+          $('btn-logout').hidden = false;
+        }
+      } catch (e) { /* no server (static hosting / offline) — fall back to this device */ }
+    }
+    if (auto || state.model) return;
+
+    var rl = remote.doc && remote.doc.last, ll = lsGet(LAST_KEY);
+    var rRec = rl && remote.doc.months[rl], lRec = ll && readLocal(ll);
+    var ru = rRec ? ((rRec.edits && rRec.edits.updatedAt) || rRec.savedAt || '') : '';
+    var key = (ll && lRec && String(lRec.updatedAt || '') > ru) ? ll : (rl || ll);
+    if (!key) return;
+
+    var files = rRec && key === rl && rRec.files, fromLocal = false;
+    if (!files || !files.icrf || !files.tl) {
+      try { files = JSON.parse(lsGet(FILES_PREFIX + key) || 'null'); fromLocal = true; } catch (e) { files = null; }
+    }
+    if (!files || !files.icrf || !files.tl) return;
+    try {
+      state.icrfWb = await loadWorkbook(b64ToBuf(files.icrf.b64)); state.icrfName = files.icrf.name;
+      state.tlWb = await loadWorkbook(b64ToBuf(files.tl.b64)); state.tlName = files.tl.name;
+      state.files = { icrf: files.icrf, tl: files.tl };
+      remote.filesDirty = fromLocal && remote.online;
+      remote.localFilesDirty = false;
+      if (!fromLocal) lsSet(FILES_PREFIX + key, JSON.stringify(state.files));
+      renderUploadStatus('icrf', { ok: true, msg: 'restored — ' + state.icrfWb.worksheets[0].name });
+      renderUploadStatus('tl', { ok: true, msg: 'restored — ' + state.tlWb.worksheets[0].name });
+      maybeCombine();
+    } catch (err) {
+      console.error(err);
+      toast('Could not reopen your saved workbooks — load the files again.', true);
+    }
+  }
+  bootRestore();
 
   /* debug hook (used by tests / smoke runs; harmless otherwise) */
   window.__tcrs = {

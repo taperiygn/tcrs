@@ -246,7 +246,8 @@
           if (l.status === 'unparsed') html += '<span class="srcbadge skip">unparsed</span>';
           else if (er && er.id) {
             html += (er.coys || []).map(function (c) {
-              return '<span class="coychip" style="--c-c:var(--navy);--c-bg:rgba(255,255,255,.7)">' + esc(c) + '</span>';
+              var st = window.TCRSCoyStyle ? window.TCRSCoyStyle(c) : { cc: '#56606e', cb: '#e8ebf0' };
+              return '<span class="coychip" style="--c-c:' + st.cc + ';--c-bg:' + st.cb + '">' + esc(c) + '</span>';
             }).join('');
             if (er.edited) html += '<span class="editdot" title="edited since load">✎</span>';
           }
