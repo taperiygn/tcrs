@@ -45,8 +45,8 @@
     ok('stats populated', !!document.querySelector('#statsbar .stat .v'), 'empty');
     ok('month banner title', txt(document.getElementById('mb-title')).indexOf('NOVEMBER 2026') > -1,
       txt(document.getElementById('mb-title')));
-    ok('roster chips: 8 companies + SCHWIDE (inactive 2ND/3RD shown)',
-      document.querySelectorAll('#coy-chips .chip').length === 9 &&
+    ok('roster chips: 7 companies + SCHWIDE (inactive 2ND/3RD shown)',
+      document.querySelectorAll('#coy-chips .chip').length === 8 &&
       !!document.querySelector('#coy-chips .chip[data-coy="2ND"]') &&
       !!document.querySelector('#coy-chips .chip[data-coy="3RD"]'),
       document.querySelectorAll('#coy-chips .chip').length);

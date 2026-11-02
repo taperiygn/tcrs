@@ -39,7 +39,7 @@
   var COY_COLORS = {
     '1ST': COY_FILL_CYCLE[0], '2ND': COY_FILL_CYCLE[1], '3RD': COY_FILL_CYCLE[2],
     '4TH': COY_FILL_CYCLE[3], '5TH': COY_FILL_CYCLE[4], '6TH': COY_FILL_CYCLE[5],
-    '7TH': COY_FILL_CYCLE[6], '8TH': COY_FILL_CYCLE[7],
+    '7TH': COY_FILL_CYCLE[6],
     'SCHWIDE': ['#56606e', '#e8ebf0']
   };
   function coyStyle(c) {

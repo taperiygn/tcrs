@@ -46,7 +46,7 @@
         e.coys.forEach(function (c) { m[c] = 1; }); return m;
       }, {}))),
         ['1ST', '4TH', '5TH', '6TH', '7TH', 'SCHWIDE'], 'ICRF coy set ordered');
-      aeq(model.companies, ['1ST', '2ND', '3RD', '4TH', '5TH', '6TH', '7TH', '8TH', 'SCHWIDE'], 'companies full list (roster incl. inactive 2ND/3RD/8TH)');
+      aeq(model.companies, ['1ST', '2ND', '3RD', '4TH', '5TH', '6TH', '7TH', 'SCHWIDE'], 'companies full list (roster incl. inactive 2ND/3RD)');
 
       // default view: all companies enabled, only School 4
       var def = T.filterEntries(model, { companies: model.companies, onlySchool4: true });

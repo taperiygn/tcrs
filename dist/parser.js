@@ -37,7 +37,7 @@
     { n: 1, mark: 'S1', companies: ['A', 'B', 'C', 'D', 'E', 'F', 'G'] },
     { n: 2, mark: 'S2', companies: ['H', 'J', 'K', 'L', 'M', 'N', 'O'] },
     { n: 3, mark: 'S3', companies: ['R', 'S', 'T', 'U', 'V', 'W', 'P'] },
-    { n: 4, mark: 'S4', companies: ['1ST', '2ND', '3RD', '4TH', '5TH', '6TH', '7TH', '8TH'] }
+    { n: 4, mark: 'S4', companies: ['1ST', '2ND', '3RD', '4TH', '5TH', '6TH', '7TH'] }
   ];
   function schoolDef(n) {
     for (var i = 0; i < SCHOOLS.length; i++) if (SCHOOLS[i].n === n) return SCHOOLS[i];
