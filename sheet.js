@@ -1,8 +1,8 @@
 /* =====================================================================
  * TCRS — sheet.js : editable grid renderers for the live sheet
  *
- *      window.TCRSSheet.mount(container, opts)    — column/row grid
- *      window.TCRSSheet.mountTL(container, opts)  — one-column TL list
+ *      window.TCRSSheet.mount(container, opts)     — column/row grid
+ *      window.TCRSSheet.mountTLText(container, opts) — bulk TL text editor
  *
  * The renderers never mutate data themselves; validation & storage
  * live in the app. All commits re-render; scrollTop is preserved.
@@ -203,162 +203,8 @@
     return { rerender: drawBody, setSearch: function (t) { state.search = t || ''; drawBody(); } };
   }
 
-  /* =========================================== one-column TL listing == */
-  function mountTL(container, opts) {
-    T = window.TCRS;
-    var state = { search: '', editing: null, delArm: null, scrollTop: 0 };
-
-    container.classList.add('sheet');
-    container.innerHTML =
-      '<div class="sheet-scroll" tabindex="-1">' +
-      '<div class="tl-wrap"></div>' +
-      '</div>';
-    var scroll = container.querySelector('.sheet-scroll');
-    var wrap = container.querySelector('.tl-wrap');
-
-    function matchLine(l) {
-      if (!state.search) return true;
-      return (l.text || '').toLowerCase().indexOf(state.search.toLowerCase()) > -1;
-    }
-
-    function drawBody() {
-      var blocks = opts.getBlocks();
-      var html = '';      blocks.forEach(function (b) {
-        var lines = b.lines.filter(matchLine);
-        html += '<div class="tl-block">';
-        html += b.date
-          ? '<div class="tl-date"><span class="tl-day">' + esc(T.fmtDate(b.date)) + '</span>' +
-            '<span class="tl-dow">' + esc(T.dowOf(b.date)) + '</span>' +
-            (b.tbc ? '<span class="tbctag">*TBC*</span>' : '') +
-            '<span class="tl-count">' + b.lines.length + " lines</span></div>"
-          : '<div class="tl-date"><span class="tl-day">' + esc(b.title || '') + '</span>' +
-            '<span class="tl-count">' + b.lines.length + ' lines</span></div>';
-        html += '<div class="tl-lines">';
-        lines.forEach(function (l) {
-          var er = opts.entryFor ? opts.entryFor(l) : null;
-          html += '<div class="tl-line' + (l.status === 'unparsed' ? ' bad' : '') + (l.status === 'new' ? ' new' : '') +
-            '" data-id="' + esc(l.id) + '"' +
-            (l.status === 'unparsed' ? ' title="This line was not recognised — click to fix it"' : '') + '>';
-          html += '<span class="tl-text">' +
-            (l.status === 'new' && !l.text ? '<span class="ghostnote">new line — click, then type the movement…</span>' : esc(l.text)) +
-            '</span>';
-          html += '<span class="tl-meta">';
-          if (l.status === 'unparsed') html += '<span class="srcbadge skip">unparsed</span>';
-          else if (er && er.id) {
-            html += (er.coys || []).map(function (c) {
-              var st = window.TCRSCoyStyle ? window.TCRSCoyStyle(c) : { cc: '#56606e', cb: '#e8ebf0' };
-              return '<span class="coychip" style="--c-c:' + st.cc + ';--c-bg:' + st.cb + '">' + esc(c) + '</span>';
-            }).join('');
-            if (er.edited) html += '<span class="editdot" title="edited since load">✎</span>';
-          }
-          html += '</span>';
-          html += '<span class="tl-gutter noclick">' +
-            '<button class="g-btn" data-act="dup" title="Duplicate this line">⧉</button>' +
-            '<button class="g-btn g-del" data-act="del" title="Delete this line">✕</button>' +
-            '</span>';
-          html += '</div>';
-        });
-        html += '</div>';
-        html += '<div class="tl-add" data-b="' + esc(b.key) + '">＋ Add line under ' +
-          (b.date ? esc(T.fmtDate(b.date)) : 'this block') + '</div>';
-        html += '</div>';
-      });
-      wrap.innerHTML = html || '<div class="tl-none">no lines match your filters</div>';
-
-      var total = 0, shown = 0;
-      blocks.forEach(function (b) { total += b.lines.length; shown += b.lines.filter(matchLine).length; });
-      var note = container.parentElement.querySelector('.sheet-note');
-      if (note) {
-        if (typeof opts.note === 'function') note.textContent = opts.note(total, shown, blocks);
-        else note.textContent = shown + ' of ' + total + ' lines shown' +
-          (shown !== total ? ' — the rest hidden by your filters' : '');
-      }
-      scroll.scrollTop = state.scrollTop;
-    }
-
-    /* ------------------------------------------------------- editing */
-    function beginEdit(lineEl) {
-      var id = lineEl.dataset.id;
-      var info = opts.lineToEdit(id);          // {text, placeholder}
-      if (!info) return;
-      lineEl.innerHTML = '';
-      var input = document.createElement('input');
-      input.className = 'sheet-input tl-input';
-      input.value = info.text;
-      input.spellcheck = false;
-      lineEl.appendChild(input);
-      input.focus();
-      input.select();
-      state.editing = { el: lineEl, input: input };
-
-      input.addEventListener('keydown', function (ev) {
-        if (ev.key === 'Enter') { ev.preventDefault(); commit(); }
-        else if (ev.key === 'Escape') {
-          ev.stopPropagation();
-          state.editing = null;
-          if (info.isNew) opts.delLine(id);
-          drawBody();
-        }
-      });
-      input.addEventListener('blur', function () { commit(); });
-
-      function commit() {
-        if (!state.editing || state.editing.input !== input) return;
-        state.editing = null;
-        var txt = input.value.trim();
-        if (!txt && info.isNew) { opts.delLine(id); drawBody(); return; }
-        if (!txt) { drawBody(); return; }
-        var res = opts.commitLine(id, txt) || { ok: false, msg: 'not accepted' };
-        drawBody();
-        if (!res.ok && res.msg) {
-          var el2 = wrap.querySelector('.tl-line[data-id="' + id + '"]');
-          if (el2) {
-            el2.classList.add('cell-error');
-            el2.title = res.msg;
-            setTimeout(function () { el2.classList.remove('cell-error'); }, 2200);
-          }
-        }
-      }
-    }
-
-    wrap.addEventListener('click', function (ev) {
-      var add = ev.target.closest('.tl-add');
-      if (add) { opts.addLine(add.dataset.b); return; }
-      var btn = ev.target.closest('.g-btn');
-      if (btn) {
-        var el = ev.target.closest('.tl-line'); var id = el ? el.dataset.id : null;
-        if (!id) return;
-        if (btn.dataset.act === 'dup') { opts.dupLine(id); return; }
-        if (btn.dataset.act === 'del') {
-          if (state.delArm === id) { state.delArm = null; opts.delLine(id); }
-          else {
-            state.delArm = id;
-            btn.classList.add('armed');
-            btn.title = 'click again to confirm delete';
-            setTimeout(function () { state.delArm = null; drawBody(); }, 2600);
-          }
-          return;
-        }
-      }
-      var line = ev.target.closest('.tl-line');
-      if (!line || line.classList.contains('noclick')) return;
-      if (state.editing) return;
-      beginEdit(line);
-    });
-
-    scroll.addEventListener('scroll', function () { state.scrollTop = scroll.scrollTop; });
-
-    drawBody();
-
-    return {
-      rerender: drawBody,
-      setSearch: function (t) { state.search = t || ''; drawBody(); }
-    };
-  }
-
   window.TCRSSheet = {
     mount: mount,
-    mountTL: mountTL,
     mountTLText: mountTLText
   };
 

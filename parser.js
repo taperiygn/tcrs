@@ -421,14 +421,6 @@
     return e.vehicleType || '—';
   }
 
-  function prettyDate(ymdStr) {
-    if (!ymdStr) return 'date not yet parsed';
-    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymdStr);
-    if (!m) return ymdStr;
-    var d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
-    return DOW[d.getUTCDay()] + '  ' + pad(+m[3]) + '/' + pad(+m[2]) + '/' + m[1];
-  }
-
   function dowOf(ymdStr) {
     var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymdStr);
     if (!m) return '';
@@ -495,7 +487,6 @@
     sortEntries: sortEntries,
     timeLabel: timeLabel,
     vehicleLabel: vehicleLabel,
-    prettyDate: prettyDate,
     dowOf: dowOf,
     fmtDate: fmtDate,
     parseTLLineText: parseTLLineText,

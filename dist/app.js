@@ -46,7 +46,6 @@
   }
 
   var $ = function (id) { return document.getElementById(id); };
-  window.TCRSCoyStyle = coyStyle;
 
   /* ----------------------------------------------------------- toast -- */
   var toastTimer = null;
@@ -473,7 +472,6 @@
     normalizeTLLines();
 
     syncControls();
-    renderMonthBanner();
     renderChips();
     renderNotes();
     refreshDerived();
@@ -961,32 +959,6 @@
     return base;
   }
 
-  var tlIdx = { lines: {}, entries: {} }, tlTitle = '';
-  function tlViewBlocks() {          // also rebuilds id lookups once per render
-    tlIdx = { lines: {}, entries: {} };
-    state.tlLines.forEach(function (l) { if (l.id) tlIdx.lines[l.id] = l; });
-    state.entries.forEach(function (e) { tlIdx.entries[e.id] = e; });
-    var b = tlBlocks();
-    tlTitle = b.title;
-    return b.blocks;
-  }
-  function entryForLine(line) {
-    var l = tlIdx.lines[line.id];
-    if (!l) return null;
-    if (l.entryId) return tlIdx.entries[l.entryId] || null;
-    return l.status === 'ok' && l.row != null ? tlIdx.entries['t' + l.row] || null : null;
-  }
-  function lineToEdit(id) {
-    var l = findTLLine(id);
-    return l ? { text: l.text || '', isNew: l.status === 'new' } : null;
-  }
-  function tlNote(total, shown, blocks) {
-    var title = tlTitle;
-    var n = blocks.length;
-    return title + ' · ' + n + ' days · ' + shown + ' of ' + total + ' lines shown' +
-      (shown !== total ? ' — the rest hidden by your filters' : '');
-  }
-
   var ICRF_COLS = [
     { key: 'colA', label: 'SCH / company / activity', w: 210, flex: true, type: 'text' },
     { key: 'vehicleType', label: 'Veh type', w: 84, type: 'text' },
@@ -1006,21 +978,22 @@
 
   /* ---------------------------------------------------------- render -- */
   function refreshDerived() {
-    renderStats(filteredEntries());
-    drawView();
-    renderMonthBanner();
+    var list = filteredEntries();      // one filter+sort shared by every renderer
+    renderStats(list);
+    drawView(list);
+    renderMonthBanner(list);
     if (state.tab === 'grid') rerenderSrc();
     updateSavePill();
   }
 
-  function renderMonthBanner() {
+  function renderMonthBanner(list) {
     var m = state.model;
     if (!m) { $('month-banner').hidden = true; return; }
     $('month-banner').hidden = false;
     $('mb-top').textContent = m.monthName ? m.monthName.slice(0, 3) : '—';
     $('mb-mon').textContent = m.year;
     var days = {};
-    filteredEntries().forEach(function (e) { if (e.date) days[e.date] = 1; });
+    (list || filteredEntries()).forEach(function (e) { if (e.date) days[e.date] = 1; });
     $('mb-day').textContent = Object.keys(days).length;
     $('mb-title').textContent = m.monthName + ' ' + m.year + ' · School 4 combined schedule';
     $('mb-sub').textContent = Object.keys(days).length + ' days with movements · from ' +
@@ -1094,8 +1067,8 @@
     return { movements: s.movements, buses: s.buses, veh: s.veh, groups: s.coys.size, days: s.days.size, flags: s.flags, tbc: s.tbc };
   }
 
-  function renderStats(entries) {
-    var s = statsFor(entries);
+  function renderStats(list) {
+    var s = statsFor(list || filteredEntries());
     var warn = s.flags + s.tbc;
     $('statsbar').innerHTML =
       stat(s.movements, 'Movements', '') +
@@ -1181,8 +1154,8 @@
     return '<thead><tr>' + cols.map(function (c) { return '<th>' + c + '</th>'; }).join('') + '</tr></thead>';
   }
 
-  function drawView() {
-    var entries = filteredEntries();
+  function drawView(list) {
+    var entries = list || filteredEntries();
     var view = state.view;
     var poc = state.poc;
     var c = $('content');
@@ -1550,8 +1523,6 @@
       }
     });
 
-    $('new-row-date') && ($('new-row-date').dataset.default = '');
-    $('grid-note-addrow') && ($('grid-note-addrow').hidden = false);
     document.querySelectorAll('.acc-head').forEach(function (h) {
       h.addEventListener('click', function () { h.parentElement.classList.toggle('open'); });
     });
