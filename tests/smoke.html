@@ -45,8 +45,13 @@
     ok('stats populated', !!document.querySelector('#statsbar .stat .v'), 'empty');
     ok('month banner title', txt(document.getElementById('mb-title')).indexOf('NOVEMBER 2026') > -1,
       txt(document.getElementById('mb-title')));
-    ok('6 company chips', document.querySelectorAll('#coy-chips .chip').length === 6,
+    ok('roster chips: 8 companies + SCHWIDE (inactive 2ND/3RD shown)',
+      document.querySelectorAll('#coy-chips .chip').length === 9 &&
+      !!document.querySelector('#coy-chips .chip[data-coy="2ND"]') &&
+      !!document.querySelector('#coy-chips .chip[data-coy="3RD"]'),
       document.querySelectorAll('#coy-chips .chip').length);
+    ok('school menu lists 4 schools', document.querySelectorAll('#school-menu button').length === 4);
+    ok('default profile is School 4', A.state.school === 4 && txt(document.querySelector('.smark')) === 'S4');
     ok('by-date groups rendered', document.querySelectorAll('#content .group').length >= 20,
       document.querySelectorAll('#content .group').length);
     ok('281 rows in schedule', A.filteredEntries().length === 281, A.filteredEntries().length);
@@ -210,6 +215,36 @@
     ok('export notes mention manual adjustments',
       /manually adjusted/.test(String(outWb.worksheets[0].getRow(2).getCell(1).value)),
       String(outWb.worksheets[0].getRow(2).getCell(1).value));
+
+    /* ---------- school profiles ---------- */
+    await A.setSchool(2);
+    ok('switching to School 2 clears the workspace',
+      A.state.school === 2 && !A.state.model && document.getElementById('empty-state').hidden === false);
+    ok('School 2 texts applied', txt(document.querySelector('.smark')) === 'S2' &&
+      txt(document.querySelector('.t1')).indexOf('School 2') === 0 && document.title.indexOf('School 2') > -1,
+      txt(document.querySelector('.t1')));
+    A.state.icrfWb = wbA; A.state.icrfName = 'ICRF.xlsx';
+    A.state.tlWb = wbB; A.state.tlName = 'troop lift.xlsx';
+    A.maybeCombine();
+    var s2chips = [].map.call(document.querySelectorAll('#coy-chips .chip'), function (c) { return c.dataset.coy; });
+    ok('School 2 roster chips H,J,K,L,M,N,O', s2chips.filter(function (c) { return c !== 'SCHWIDE'; }).join('') === 'HJKLMNO', s2chips.join(','));
+    ok('School 4 rows are not imported into School 2',
+      A.state.entries.every(function (e) { return e.coys.every(function (c) { return c === 'SCHWIDE' || 'HJKLMNO'.indexOf(c) > -1; }); }));
+    A.state.entries.push({ id: 'z1', source: 'MANUAL', coys: ['K'], coyLabel: 'K', date: '2026-11-03', eDate: '2026-11-03',
+      timeStart: '0800', timeEnd: '', from: 'X', to: 'Y', qty: 1, vehicleType: 'LUV', kind: 'veh', activity: 'T', edited: true });
+    A.state.touched = true; A.flushSave();
+    ok('School 2 data stored under its own key',
+      Object.keys(localStorage).some(function (k) { return /^tcrs:v3:s2:/.test(k); }) &&
+      localStorage.getItem('tcrs:v3:s4:11-2026') !== localStorage.getItem('tcrs:v3:s2:11-2026') &&
+      localStorage.getItem('tcrs:v3:s4:11-2026').indexOf('"id":"z1"') === -1 &&
+      localStorage.getItem('tcrs:v3:s2:11-2026').indexOf('"id":"z1"') > -1,
+      Object.keys(localStorage).join(','));
+    await A.setSchool(1);
+    ok('School 1 starts empty and uses letter roster',
+      !A.state.model && A.state.entries.length === 0 && A.state.school === 1);
+    await A.setSchool(4);
+    ok('back on School 4', A.state.school === 4 && txt(document.querySelector('.smark')) === 'S4');
+    localStorage.clear();
 
     /* ---------- blank panel when nothing is parsed ---------- */
     A.state.model = null; A.setTab('grid');

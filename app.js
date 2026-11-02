@@ -8,6 +8,7 @@
 
   /* ---------------------------------------------------------- state -- */
   var state = {
+    school: 4,              // active school profile (1–4); drives rosters, keys & texts
     icrfWb: null, icrfName: '',
     tlWb: null, tlName: '',
     model: null,            // parse result (entries, fixes, skipped, unmatched)
@@ -28,20 +29,26 @@
     icrfGrid: null, tlGrid: null
   };
 
-  var COY_COLORS = {            // [text, pastel fill]
-    '1ST': ['#86650f', '#fcf3d3'],
-    '2ND': ['#4f5f8a', '#e3e8f6'],
-    '3RD': ['#a9582f', '#fde9dd'],
-    '4TH': ['#ad4660', '#fbe1e7'],
-    '5TH': ['#2c7557', '#dff4ea'],
-    '6TH': ['#35698f', '#dcedfa'],
-    '7TH': ['#5a4fb8', '#e8e4fb'],
-    '8TH': ['#8a5470', '#f6e2ee'],
+  /* Pastel palette, applied by roster order; school 4 keeps its established
+     colours, letter schools cycle through the same fills. */
+  var COY_FILL_CYCLE = [
+    ['#86650f', '#fcf3d3'], ['#4f5f8a', '#e3e8f6'], ['#a9582f', '#fde9dd'],
+    ['#ad4660', '#fbe1e7'], ['#2c7557', '#dff4ea'], ['#35698f', '#dcedfa'],
+    ['#5a4fb8', '#e8e4fb'], ['#8a5470', '#f6e2ee']
+  ];
+  var COY_COLORS = {
+    '1ST': COY_FILL_CYCLE[0], '2ND': COY_FILL_CYCLE[1], '3RD': COY_FILL_CYCLE[2],
+    '4TH': COY_FILL_CYCLE[3], '5TH': COY_FILL_CYCLE[4], '6TH': COY_FILL_CYCLE[5],
+    '7TH': COY_FILL_CYCLE[6], '8TH': COY_FILL_CYCLE[7],
     'SCHWIDE': ['#56606e', '#e8ebf0']
   };
   function coyStyle(c) {
     var p = COY_COLORS[c];
-    if (!p) return { cc: '#56606e', cb: '#e8ebf0' };
+    if (!p) {
+      var roster = T.schoolCompanies(state.school);
+      var i = roster.indexOf(c);
+      p = i > -1 ? COY_FILL_CYCLE[i % COY_FILL_CYCLE.length] : COY_FILL_CYCLE[0];
+    }
     return { cc: p[0], cb: p[1] };
   }
 
@@ -79,12 +86,32 @@
        1. the server (/api/state) — survives closing the browser, shared across devices
        2. localStorage            — instant, and the fallback when the server is unreachable
      The two source workbooks are stored next to the edits, so reopening the site
-     brings the whole workspace back without uploading anything again. */
-  var STORE_PREFIX = 'tcrs:v3:';
-  var FILES_PREFIX = 'tcrs:files:';
-  var LAST_KEY = 'tcrs:last';
-  function monthKey() { return state.model.month + '-' + state.model.year; }
-  function storeKey() { return STORE_PREFIX + monthKey(); }
+     brings the whole workspace back without uploading anything again.
+     Each school is a separate profile: every storage key is prefixed with the
+     school, so School 4 months and School 2 months never share data. */
+  function schoolPart() { return 's' + state.school; }
+  function monthStr() { return state.model.month + '-' + state.model.year; }
+  function monthKey() { return schoolPart() + '-' + state.model.month + '-' + state.model.year; }
+  function storeKey() { return 'tcrs:v3:' + schoolPart() + ':' + monthStr(); }
+  function filesKey() { return 'tcrs:files:' + schoolPart() + ':' + monthStr(); }
+  function lastKey() { return 'tcrs:last:' + schoolPart() + ':'; }
+
+  /* one-time rename: the original keys ('tcrs:v3:<MONTH>-<YEAR>') belonged to School 4 */
+  function migrateLegacyKeys() {
+    var keys = [];
+    try { for (var i = 0; i < localStorage.length; i++) keys.push(localStorage.key(i)); } catch (e) { return; }
+    var MYR = '(JANUARY|FEBRUARY|MARCH|APRIL|MAY|JUNE|JULY|AUGUST|SEPTEMBER|OCTOBER|NOVEMBER|DECEMBER)-\\d{4}';
+    var re = new RegExp('^(tcrs:v3:|tcrs:files:)' + MYR + '$');
+    keys.forEach(function (k) {
+      var m = re.exec(k);
+      if (m) { lsSet(m[1] + 's4:' + m[2], lsGet(k)); lsDel(k); }
+    });
+    if (lsGet('tcrs:last:s4:') === null && lsGet('tcrs:last') !== null && lsGet('tcrs:last') !== undefined) {
+      lsSet('tcrs:last:s4:', lsGet('tcrs:last'));
+      lsDel('tcrs:last');
+    }
+  }
+  migrateLegacyKeys();
 
   var remote = {
     online: false,          // server reachable and signed in
@@ -193,14 +220,14 @@
     savePending = false;
     var e = editsPayload() || { updatedAt: new Date().toISOString(), entries: [], tlLines: [], skipped: [] };
     var o = currentOpts(), key = monthKey();
-    var okLocal = lsSet(STORE_PREFIX + key, JSON.stringify({
+    var okLocal = lsSet(storeKey(), JSON.stringify({
       v: 3, at: Date.now(), updatedAt: e.updatedAt,
       entries: e.entries, tlLines: e.tlLines, skipped: e.skipped, opts: o
     }));
     if (remote.localFilesDirty && state.files.icrf && state.files.tl) {
-      if (lsSet(FILES_PREFIX + key, JSON.stringify(state.files))) remote.localFilesDirty = false;
+      if (lsSet(filesKey(), JSON.stringify(state.files))) remote.localFilesDirty = false;
     }
-    lsSet(LAST_KEY, key);
+    lsSet(lastKey(), key);
     if (remote.online) pushRemote(keepalive === true);
     else setSync('local', okLocal ? 'Saved on this device' : 'Not saved — storage unavailable');
   }
@@ -247,7 +274,7 @@
   /* -- loading -- */
   function readLocal(key) {
     try {
-      var d = JSON.parse(lsGet(STORE_PREFIX + key) || 'null');
+      var d = JSON.parse(lsGet(storeKey()) || 'null');
       if (d && d.v === 3 && Array.isArray(d.entries)) { d.hasEdits = d.entries.length > 0; return d; }
     } catch (e) { }
     return null;
@@ -368,8 +395,8 @@
   /* Removing a workbook unloads it for good (it won't reappear on reload); the edits
      stay stored, and come back if the same month is combined again. */
   function forgetFiles(key) {
-    lsDel(FILES_PREFIX + key);
-    lsDel(LAST_KEY);
+    lsDel(filesKey());
+    lsDel(lastKey());
     if (remote.online && !remote.conflict) {
       fetch('/api/state/' + encodeURIComponent(key), {
         method: 'PUT', credentials: 'same-origin',
@@ -404,7 +431,8 @@
         var tlSheet = pickTLSheet(state.tlWb);
         model = T.parseWorkbooks(
           { worksheets: [icrfSheet] },
-          { worksheets: [tlSheet] });
+          { worksheets: [tlSheet] },
+          state.school);
       } catch (err) {
         console.error(err);
         toast('Parsing failed: ' + esc(String(err && err.message || err)), true);
@@ -428,6 +456,12 @@
     }
 
     state.model = model;
+
+    /* the roster decides the chip list: every company of the school is offered
+       even if the current files have no movements for it yet */
+    T.schoolCompanies(state.school).forEach(function (c) {
+      if (model.companies.indexOf(c) === -1) model.companies.push(c);
+    });
 
     // company defaults
     state.coys = {};
@@ -461,7 +495,7 @@
         }
       });
     });
-    model.companies = T.sortCoys(model.companies);
+    model.companies = T.sortCoys(model.companies, state.school);
 
     // pristine snapshot ("Reset edits") — plain copy, order preserved as parsed
     state.pristine = JSON.parse(JSON.stringify({
@@ -546,7 +580,7 @@
   function registerCoy(c) {
     if (state.model && c !== 'SCHWIDE' && state.model.companies.indexOf(c) === -1) {
       state.model.companies.push(c);
-      state.model.companies = T.sortCoys(state.model.companies);
+      state.model.companies = T.sortCoys(state.model.companies, state.school);
       state.coys[c] = true;
       renderChips();
     }
@@ -583,7 +617,7 @@
   function icrfColA(e) {
     var part = e.coys[0] === 'SCHWIDE' ? 'SCHWIDE'
       : (e.coys.length ? e.coys.map(function (c) { return c + ' COY'; }).join(' / ') : '? COY');
-    return 'SCH 4 - ' + part + ' - ' + (e.activity || '');
+    return 'SCH ' + state.school + ' - ' + part + ' - ' + (e.activity || '');
   }
   function numRow(r) {
     return typeof r === 'number' ? r : (typeof r === 'string' && r !== '' ? +r : 9e6);
@@ -621,8 +655,8 @@
     if (!e) return { ok: false, msg: 'row not found' };
     switch (key) {
       case 'colA': {
-        var p = T.parseICRFColA(raw);
-        if (!p.ok) return { ok: false, msg: 'keep "SCH 4 - <6TH COY> - <ACTIVITY>" — ' + p.msg };
+        var p = T.parseICRFColA(raw, state.school);
+        if (!p.ok) return { ok: false, msg: 'keep "SCH ' + state.school + ' - <COY> - <ACTIVITY>" — ' + p.msg };
         e.coys = p.coys; e.coyLabel = p.coys.join(' / '); e.activity = p.activity;
         p.coys.forEach(registerCoy);
         break;
@@ -682,8 +716,8 @@
     var idx = +id.slice(1);
     var s = state.skipped[idx];
     if (!s) return { ok: false, msg: 'row not found' };
-    var p = T.parseICRFColA(raw);
-    if (!p.ok) return { ok: false, msg: 'keep "SCH 4 - <6TH COY> - <ACTIVITY>" — ' + p.msg };
+    var p = T.parseICRFColA(raw, state.school);
+    if (!p.ok) return { ok: false, msg: 'keep "SCH ' + state.school + ' - <COY> - <ACTIVITY>" — ' + p.msg };
     p.coys.forEach(registerCoy);
     state.entries.push({
       id: 'i' + s.row, source: 'ICRF',
@@ -705,7 +739,7 @@
   function addIcrfRow() {
     var maxRow = 0;
     state.entries.forEach(function (e) { if (e.row > maxRow) maxRow = e.row; });
-    var coy = enabledCoys()[0] || '1ST';
+    var coy = enabledCoys()[0] || T.schoolCompanies(state.school)[0];
     state.entries.push({
       id: 'm' + Date.now(), source: 'MANUAL', via: 'icrf',
       date: '', eDate: '', dayDiff: 0, nextDay: false,
@@ -811,7 +845,7 @@
 
       /* movement line */
       total++;
-      var lp = T.parseTLLineText(t);
+      var lp = T.parseTLLineText(t, state.school);
       var old = pool[t] && pool[t].length ? pool[t].shift() : null;
       var nl = {
         id: old ? old.id : ('m' + now + '-' + (++seq)),
@@ -995,7 +1029,7 @@
     var days = {};
     (list || filteredEntries()).forEach(function (e) { if (e.date) days[e.date] = 1; });
     $('mb-day').textContent = Object.keys(days).length;
-    $('mb-title').textContent = m.monthName + ' ' + m.year + ' · School 4 combined schedule';
+    $('mb-title').textContent = m.monthName + ' ' + m.year + ' · School ' + state.school + ' combined schedule';
     $('mb-sub').textContent = Object.keys(days).length + ' days with movements · from ' +
       (state.icrfName || '—') + ' + ' + (state.tlName || '—');
   }
@@ -1007,7 +1041,13 @@
       box.innerHTML = '<span class="hintline">Load both files to detect companies.</span>';
       return;
     }
+    /* roster-driven: every company of the school shows as a chip, even when it
+       has no movements in the current data (inactive companies stay visible) */
+    var list = T.schoolCompanies(state.school).slice();
     state.model.companies.forEach(function (c) {
+      if (list.indexOf(c) === -1) list.push(c);      // manual / extra tags
+    });
+    T.sortCoys(list, state.school).forEach(function (c) {
       var on = c === 'SCHWIDE' ? state.schwide : !!state.coys[c];
       var st = coyStyle(c);
       var b = document.createElement('span');
@@ -1221,7 +1261,7 @@
       });
       if (!any) {
         c.innerHTML = '<div class="empty"><h2 style="margin:0;color:var(--ink)">No movements match the current filters</h2>' +
-          '<p class="hintline">Try enabling more companies, or turning “Keep only School 4 movements” off.</p></div>';
+          '<p class="hintline">Try enabling more companies, or turning “Keep only School ' + state.school + ' movements” off.</p></div>';
       }
     }
   }
@@ -1244,7 +1284,7 @@
     var poc = state.poc;
     var m = state.model;
     var wb = new ExcelJS.Workbook();
-    wb.creator = 'TCRS School 4 Combined Movement Builder';
+    wb.creator = 'TCRS School ' + state.school + ' Combined Movement Builder';
     wb.created = new Date();
 
     var NAVY = 'FF16324A', NAVYPAT = { type: 'pattern', pattern: 'solid', fgColor: { argb: NAVY } };
@@ -1305,9 +1345,9 @@
       return r;
     }
 
-    var genNote = 'Assembled from ICRF (School 4 vehicles) + Troop Lift (buses/tonners) · generated ' +
+    var genNote = 'Assembled from ICRF (School ' + state.school + ' vehicles) + Troop Lift (buses/tonners) · generated ' +
       new Date().toISOString().slice(0, 16).replace('T', ' ') +
-      (state.onlyS4 ? ' · School 4 movements only' : ' · ALL movements (incl. other units)') +
+      (state.onlyS4 ? ' · School ' + state.school + ' movements only' : ' · ALL movements (incl. other units)') +
       (state.schwide ? ' · SCHWIDE included' : '') +
       (state.entries.some(function (e) { return e.edited || e.source === 'MANUAL'; })
         ? ' · some rows manually adjusted — see the Data notes sheet' : '');
@@ -1418,7 +1458,7 @@
     var blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     var a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'SCH4_' + m.monthName + '_' + m.year + '_Combined.xlsx';
+    a.download = 'SCH' + state.school + '_' + m.monthName + '_' + m.year + '_Combined.xlsx';
     document.body.appendChild(a);
     a.click();
     setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 400);
@@ -1536,9 +1576,92 @@
     setTimeout(function () { $('btn-sample').click(); }, 60);
   }
 
+  (function () {
+    var saved = parseInt(lsGet('tcrs:school'), 10);
+    if (saved >= 1 && saved <= 4 && !/^#auto/.test(location.hash)) state.school = saved;
+  })();
   init();
+  initSchoolMenu();
+  applySchoolTexts();
   setTab(state.tab);   // sync visibility with the (possibly hash-set) tab
   syncControls();
+
+  /* ------------------------------------------------- school profiles -- */
+  function schoolDef(n) {
+    return T.SCHOOLS.filter(function (x) { return x.n === n; })[0] || T.SCHOOLS[3];
+  }
+  function setText(sel, txt) {
+    document.querySelectorAll(sel).forEach(function (el) { el.textContent = txt; });
+  }
+  function applySchoolTexts() {
+    var n = state.school, def = schoolDef(n);
+    setText('.sn', n);
+    setText('.smark', def.mark);
+    setText('.scoy', def.companies[def.companies.length > 5 ? 5 : 0]);
+    document.title = 'TCRS · School ' + n + ' Combined Movement Builder';
+    var fav = document.querySelector('link[rel="icon"]');
+    if (fav) {
+      fav.href = "data:image/svg+xml," + encodeURIComponent(
+        "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'>" +
+        "<stop offset='0' stop-color='#c9c1f5'/><stop offset='1' stop-color='#a9d8ec'/></linearGradient></defs>" +
+        "<rect width='64' height='64' rx='16' fill='url(#g)'/><text x='32' y='43' font-family='Helvetica' font-size='25' " +
+        "font-weight='bold' fill='#2b2560' text-anchor='middle'>" + def.mark + "</text></svg>");
+    }
+    var menu = $('school-menu');
+    if (menu) [].forEach.call(menu.children, function (b) { b.classList.toggle('on', +b.dataset.school === n); });
+  }
+
+  /* Each school is its own workspace: park this one (saved under its keys),
+     blank the screen, then reopen whatever the new school had open. */
+  async function setSchool(n) {
+    n = +n;
+    if (n === state.school || !T.SCHOOLS.some(function (x) { return x.n === n; })) return;
+    flushSave();
+    clearTimeout(saveTimer);
+    savePending = false;
+    state.school = n;
+    lsSet('tcrs:school', String(n));
+
+    state.icrfWb = null; state.tlWb = null; state.icrfName = ''; state.tlName = '';
+    state.files = { icrf: null, tl: null };
+    state.icrfGrid = null; state.tlGrid = null;
+    state.restoredAt = null; state.touched = false; state.scheduleStale = false;
+    remote.filesDirty = remote.localFilesDirty = false;
+    state.coys = {}; state.schwide = true; state.onlyS4 = true; state.poc = true;
+    ['icrf', 'tl'].forEach(function (which) {
+      $('file-' + which).value = '';
+      var box = $(which + '-status');
+      box.hidden = true; box.innerHTML = '';
+      $('up-' + which).classList.remove('done');
+    });
+    applySchoolTexts();
+    maybeCombine();               // no files → clears the results and shows the empty state
+    syncControls();
+    await restoreWorkspace();
+  }
+
+  function initSchoolMenu() {
+    var btn = $('school-btn'), menu = $('school-menu');
+    menu.innerHTML = T.SCHOOLS.map(function (x) {
+      return '<button type="button" role="menuitem" data-school="' + x.n + '"><span class="sm-mark">' + x.mark +
+        '</span><span>School ' + x.n + '<span class="sm-sub">' + x.companies.join(' · ') + '</span></span></button>';
+    }).join('');
+    function close() { menu.hidden = true; btn.setAttribute('aria-expanded', 'false'); }
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var open = menu.hidden;
+      menu.hidden = !open;
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+    menu.addEventListener('click', function (e) {
+      var b = e.target.closest('button[data-school]');
+      if (!b) return;
+      close();
+      setSchool(+b.dataset.school);
+    });
+    document.addEventListener('click', close);
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
+  }
 
   /* Reopen the workspace: ask the server (or, failing that, this device) what was open last. */
   async function bootRestore() {
@@ -1556,8 +1679,21 @@
       } catch (e) { /* no server (static hosting / offline) — fall back to this device */ }
     }
     if (auto || state.model) return;
+    await restoreWorkspace();
+  }
 
-    var rl = remote.doc && remote.doc.last, ll = lsGet(LAST_KEY);
+  /* reopen whatever this school's profile had open last */
+  async function restoreWorkspace() {
+    var rl = null, ll = null, sp = 's' + state.school + '-';
+    if (remote.doc && remote.doc.last) {
+      // only months that belong to this school's profile
+      if (remote.doc.last.indexOf(sp) === 0) rl = remote.doc.last;
+      else Object.keys(remote.doc.months || {}).forEach(function (k) {
+        if (rl === null && k.indexOf(sp) === 0) rl = k;
+      });
+    }
+    ll = lsGet(lastKey());
+    if (ll && ll.indexOf(sp) !== 0) ll = null;
     var rRec = rl && remote.doc.months[rl], lRec = ll && readLocal(ll);
     var ru = rRec ? ((rRec.edits && rRec.edits.updatedAt) || rRec.savedAt || '') : '';
     var key = (ll && lRec && String(lRec.updatedAt || '') > ru) ? ll : (rl || ll);
@@ -1565,7 +1701,7 @@
 
     var files = rRec && key === rl && rRec.files, fromLocal = false;
     if (!files || !files.icrf || !files.tl) {
-      try { files = JSON.parse(lsGet(FILES_PREFIX + key) || 'null'); fromLocal = true; } catch (e) { files = null; }
+      try { files = JSON.parse(lsGet(filesKey()) || 'null'); fromLocal = true; } catch (e) { files = null; }
     }
     if (!files || !files.icrf || !files.tl) return;
     try {
@@ -1574,7 +1710,7 @@
       state.files = { icrf: files.icrf, tl: files.tl };
       remote.filesDirty = fromLocal && remote.online;
       remote.localFilesDirty = false;
-      if (!fromLocal) lsSet(FILES_PREFIX + key, JSON.stringify(state.files));
+      if (!fromLocal) lsSet(filesKey(), JSON.stringify(state.files));
       renderUploadStatus('icrf', { ok: true, msg: 'restored — ' + state.icrfWb.worksheets[0].name });
       renderUploadStatus('tl', { ok: true, msg: 'restored — ' + state.tlWb.worksheets[0].name });
       maybeCombine();
@@ -1589,6 +1725,7 @@
   window.__tcrs = {
     state: state,
     maybeCombine: maybeCombine,
+    setSchool: setSchool,
     exportXlsx: exportXlsx,
     drawView: drawView,
     filteredEntries: filteredEntries,
@@ -1597,7 +1734,7 @@
     applyTLText: applyTLText, tlText: tlText,
     addIcrfRow: addIcrfRow, dupIcrf: dupIcrf, delIcrf: delIcrf,
     resetEdits: resetEdits,
-    flushSave: flushSave, flushSchedule: flushSchedule,
+    saveStore: saveStore, flushSave: flushSave, flushSchedule: flushSchedule,
     setTab: setTab, setSrc: setSrc,
     renderUploadStatus: renderUploadStatus
   };

@@ -12,9 +12,12 @@
 <header class="topbar">
   <div class="topbar-inner">
     <div class="brand">
-      <div class="mark">S4</div>
+      <div class="school-switch">
+        <button type="button" class="mark" id="school-btn" aria-haspopup="true" aria-expanded="false" title="Switch school profile"><span class="smark">S4</span></button>
+        <div class="school-menu" id="school-menu" role="menu" hidden></div>
+      </div>
       <div>
-        <div class="t1">School 4 · Movement Builder</div>
+        <div class="t1">School <span class="sn">4</span> · Movement Builder</div>
       </div>
     </div>
 
@@ -64,7 +67,7 @@
             <div class="badge-icrf">ICRF</div>
             <div>
               <div class="name" id="icrf-name">ICRF workbook</div>
-              <div class="hint" id="icrf-hint">Month's vehicles for School 4 — fixed 4-row header template (e.g. “V1 NOV”)</div>
+              <div class="hint" id="icrf-hint">Month's vehicles for School <span class="sn">4</span> — fixed 4-row header template (e.g. “V1 NOV”)</div>
             </div>
           </div>
         </label>
@@ -102,7 +105,7 @@
       </div>
 
       <div>
-        <div class="field-label">School 4 companies</div>
+        <div class="field-label">School <span class="sn">4</span> companies</div>
         <div class="chips" id="coy-chips"></div>
         <p class="hintline">Tap a company to include / exclude it from the combined schedule.</p>
       </div>
@@ -116,7 +119,7 @@
       <label class="checkrow">
         <input type="checkbox" id="opt-onlys4" checked>
         <span class="box"><svg viewBox="0 0 24 24"><path d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z"/></svg></span>
-        <span>Only School 4 movements<span class="sub">Off — also show other units' Troop Lift lines</span></span>
+        <span>Only School <span class="sn">4</span> movements<span class="sub">Off — also show other units' Troop Lift lines</span></span>
       </label>
 
       <label class="checkrow">
@@ -155,10 +158,10 @@
     <div id="panel-schedule">
 
       <div class="empty card" id="empty-state">
-        <h2>Combine School 4 vehicles with troop-lift buses</h2>
+        <h2>Combine School <span class="sn">4</span> vehicles with troop-lift buses</h2>
         <p class="empty-sub">
           Drop this month's <b>ICRF</b> and <b>Troop Lift</b> workbooks on the left.
-          The builder reads the fixed templates, keeps only School 4, merges both sources,
+          The builder reads the fixed templates, keeps only School <span class="sn">4</span>, merges both sources,
           and lays everything out by <b>date</b> or by <b>company</b> — fully editable in the
           <b>Live sheet</b> tab.
         </p>
@@ -166,17 +169,17 @@
           <div class="pipenode inset">
             <div class="pn-icon pn-icrf">ICRF</div>
             <div class="pn-t">ICRF sheet</div>
-            <div class="pn-d">School 4's own vehicles — LUV, 5-Ton GS, SOUV — with times, routes &amp; POCs</div>
+            <div class="pn-d">School <span class="sn">4</span>'s own vehicles — LUV, 5-Ton GS, SOUV — with times, routes &amp; POCs</div>
           </div>
           <div class="pipenode inset">
             <div class="pn-icon pn-tl">TL</div>
             <div class="pn-t">Troop Lift sheet</div>
-            <div class="pn-d">All units' buses &amp; tonners; School 4 companies extracted from the day lines</div>
+            <div class="pn-d">All units' buses &amp; tonners; School <span class="sn">4</span> companies extracted from the day lines</div>
           </div>
           <div class="pipenode inset">
-            <div class="pn-icon pn-out">S4</div>
+            <div class="pn-icon pn-out"><span class="smark">S4</span></div>
             <div class="pn-t">Combined schedule</div>
-            <div class="pn-d">One month, School 4 only — by date or by company, printable &amp; exportable</div>
+            <div class="pn-d">One month, School <span class="sn">4</span> only — by date or by company, printable &amp; exportable</div>
           </div>
         </div>
       </div>
@@ -238,7 +241,7 @@
         <div class="sheet-footnote" id="icrf-foot">
           This is the ICRF workbook exactly as it was loaded — edit any cell and the
           change flows into the Schedule tab and the .xlsx export. Editing the first
-          cell must keep <b>SCH 4 - &lt;6TH COY&gt; - &lt;ACTIVITY&gt;</b>; editing a start
+          cell must keep <b>SCH <span class="sn">4</span> - &lt;<span class="scoy">6TH</span> COY&gt; - &lt;ACTIVITY&gt;</b>; editing a start
           date shifts the end date so multi-day spans hold.
         </div>
         <div class="sheet-footnote" id="tl-foot">

@@ -26,10 +26,26 @@
     'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'];
   var DOW = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 
-  var ORDINAL = /^\d+(ST|ND|RD|TH)$/i;
   var TL_LINE = /^\*?\s*(\d{4}|TBC)\s+(.+?)\s+(?:(\d+)\s+)?(BUSES|BUS|TONNERS|TONNER)\s*\((.*)\)\*?\s*$/i;
   var TL_TBC_DATE = /^\*?\s*(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\s*(?:\(\s*\*?TBC\*?\s*\))?\*?\s*$/;
   var ICRF_ACTIVITY = /^SCH\s*(\d+)\s*-\s*(.+?)\s*-\s*(.+)$/i;
+
+  /* Each school is a profile: its own company tag set and saved workspace.
+     n=4 is the original ordinal scheme; 1-3 use letters. SCHWIDE (school-wide
+     vehicles) belongs to every school. */
+  var SCHOOLS = [
+    { n: 1, mark: 'S1', companies: ['A', 'B', 'C', 'D', 'E', 'F', 'G'] },
+    { n: 2, mark: 'S2', companies: ['H', 'J', 'K', 'L', 'M', 'N', 'O'] },
+    { n: 3, mark: 'S3', companies: ['R', 'S', 'T', 'U', 'V', 'W', 'P'] },
+    { n: 4, mark: 'S4', companies: ['1ST', '2ND', '3RD', '4TH', '5TH', '6TH', '7TH', '8TH'] }
+  ];
+  function schoolDef(n) {
+    for (var i = 0; i < SCHOOLS.length; i++) if (SCHOOLS[i].n === n) return SCHOOLS[i];
+    return SCHOOLS[3];
+  }
+  function companyOK(c, school) {
+    return c === 'SCHWIDE' || schoolDef(school).companies.indexOf(c) > -1;
+  }
 
   /* ------------------------------------------------------------------ */
   function norm(s) {
@@ -113,21 +129,25 @@
     return ymd(v);
   }
 
-  function coyRank(c) {
+  function coyRank(c, school) {
+    var list = schoolDef(school).companies;
+    var i = list.indexOf(c);
+    if (i > -1) return i + 1;                          // roster order first
+    if (c === 'SCHWIDE') return 99;                    // school-wide last
     var m = /^(\d+)(?:ST|ND|RD|TH)$/i.exec(c);
-    return m ? +m[1] : 99;
+    return m ? +m[1] : 50;                             // manual / unknown tags after roster
   }
 
-  function sortCoys(arr) {
+  function sortCoys(arr, school) {
     return arr.slice().sort(function (a, b) {
-      return coyRank(a) - coyRank(b) || a.localeCompare(b);
+      return coyRank(a, school) - coyRank(b, school) || String(a).localeCompare(String(b));
     });
   }
 
   /* ------------------------------------------------- month detection -- */
 
   /* --------------------------------------------------------- parsing -- */
-  function parseICRF(worksheet, workbook, monthRef) {
+  function parseICRF(worksheet, workbook, monthRef, profile) {
     var res = { sheetMonthWord: null, entries: [], skipped: [], coySet: {} };
     var sheetName = worksheet.name.toUpperCase();
     var sm = /(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\b/.exec(sheetName);
@@ -157,6 +177,11 @@
         return;
       }
       var coypart = am[2].trim().toUpperCase();
+      var school = Math.min(Math.max(parseInt(am[1], 10) || 4, 1), 4);
+      if (profile && school !== profile) {
+        res.skipped.push({ row: r, text: a, why: 'belongs to School ' + school + ' (this is the School ' + profile + ' profile)' });
+        return;
+      }
       var coys = [];
       if (coypart === 'SCHWIDE' || /SCH.*WIDE/.test(coypart)) {
         coys = ['SCHWIDE'];
@@ -164,7 +189,7 @@
       } else {
         coypart.split(/\s*\/\s*/).forEach(function (tok) {
           tok = tok.trim().replace(/\s*COY\.?$/i, '').trim().toUpperCase();
-          if (ORDINAL.test(tok)) { coys.push(tok); res.coySet[tok] = 1; }
+          if (companyOK(tok, school)) { coys.push(tok); res.coySet[tok] = 1; }
         });
       }
       if (!coys.length) {
@@ -225,9 +250,10 @@
      re-parsed in the app. Returns {ok:false} or
      {ok:true, fields:{timeStart,from,to,qty,vehicleType,activity,coys,
                        coyLabel,flagged,tbc,kind}} */
-  function parseTLLineText(t) {
+  function parseTLLineText(t, school) {
     var lm = TL_LINE.exec(t);
     if (!lm) return { ok: false };
+    if (school === undefined || school === null) school = 4;
     var time = lm[1] === 'TBC' ? 'TBC' : lm[1];
     var route = lm[2];
     var cnt = lm[3] ? +lm[3] : null;
@@ -241,8 +267,8 @@
     var coys = [];
     var parts = tag.split('/');
     parts.forEach(function (p) {
-      p = norm(p).toUpperCase();
-      if (ORDINAL.test(p)) coys.push(p);
+      p = norm(p).toUpperCase().replace(/\s*COY\.?$/i, '').trim();
+      if (companyOK(p, school)) coys.push(p);
     });
     // route: split at first " - "
     var from = route, to = '';
@@ -267,7 +293,7 @@
     };
   }
 
-  function parseTROOPLIFT(worksheet) {
+  function parseTROOPLIFT(worksheet, school) {
     var res = { monthWord: null, tlDateMonths: [], entries: [], lines: [], unmatched: [], coySet: {}, days: {}, tbcDays: {} };
     var curDate = null;
     worksheet.eachRow({ includeEmpty: true }, function (row) {
@@ -306,7 +332,7 @@
         return;
       }
 
-      var lp = parseTLLineText(t);
+      var lp = parseTLLineText(t, school);
       if (!lp.ok) {
         res.unmatched.push({ row: r, text: t });
         res.lines.push({ row: r, kind: 'line', text: t, status: 'unparsed', date: curDate });
@@ -371,18 +397,24 @@
     return self;
   }
 
-  function combineModels(icrf, tl) {
+  function combineModels(icrf, tl, school) {
+    if (school === undefined || school === null) school = 4;
     var monthRef = makeMonthRef(tl, icrf.sheet);
-    var icrfRes = parseICRF(icrf.sheet, icrf.workbook, monthRef);
+    var icrfRes = parseICRF(icrf.sheet, icrf.workbook, monthRef, school);
 
     var entries = icrfRes.entries.concat(tl.entries);
-    var all = {};
-    for (var k in icrfRes.coySet) all[k] = 1;
-    for (k in tl.coySet) all[k] = 1;
-    var companies = sortCoys(Object.keys(all));
+
+    /* roster order: every company of the school, then any extras found in data */
+    var all = [];
+    schoolDef(school).companies.forEach(function (c) { all.push(c); });
+    for (var k in icrfRes.coySet) if (companyOK(k, school) && all.indexOf(k) === -1) all.push(k);
+    for (k in tl.coySet) if (companyOK(k, school) && all.indexOf(k) === -1) all.push(k);
+    var companies = sortCoys(all, school);
+    icrfRes.school = school;
 
     return {
       month: monthRef.month(),
+      school: school,
       monthName: MONTH_NAME[monthRef.month() - 1],
       year: (function () {
         var ys = entries.filter(function (e) { return e.date; })
@@ -455,9 +487,13 @@
 
   /* Parse an ICRF "SCH <n> - <COYS> - <ACTIVITY>" cell. Exported for the
      live sheet's ICRF view and for repairing skipped rows on the fly. */
-  function parseICRFColA(text) {
+  function parseICRFColA(text, school) {
     var am = ICRF_ACTIVITY.exec(norm(text));
-    if (!am) return { ok: false, msg: 'expected "SCH 4 - <X COY> - <ACTIVITY>"' };
+    if (!am) return { ok: false, msg: 'expected "SCH <n> - <COY> - <ACTIVITY>"' };
+    var sn = Math.min(Math.max(parseInt(am[1], 10) || 4, 1), 4);
+    if (school !== undefined && school !== null && sn !== school) {
+      return { ok: false, msg: 'this is School ' + sn + ' data — the school ' + school + ' profile expects "SCH ' + school + '" rows' };
+    }
     var coypart = am[2].trim().toUpperCase();
     var coys = [];
     if (coypart === 'SCHWIDE' || /SCH.*WIDE/.test(coypart)) {
@@ -465,22 +501,24 @@
     } else {
       coypart.split(/\s*\/\s*/).forEach(function (tok) {
         tok = tok.trim().replace(/\s*COY\.?$/i, '').trim().toUpperCase();
-        if (ORDINAL.test(tok)) coys.push(tok);
+        if (companyOK(tok, sn)) coys.push(tok);
       });
     }
-    if (!coys.length) return { ok: false, msg: 'no recognised company ordinal' };
-    return { ok: true, coys: coys, activity: am[3].trim() };
+    if (!coys.length) return { ok: false, msg: 'no recognised company tag for School ' + (school || sn) };
+    return { ok: true, school: sn, coys: coys, activity: am[3].trim() };
   }
 
   /* export */
   window.TCRS = {
-    parseWorkbooks: function (icrfWb, tlWb) {
+    SCHOOLS: SCHOOLS,
+    schoolCompanies: function (n) { return schoolDef(n).companies.slice(); },
+    parseWorkbooks: function (icrfWb, tlWb, school) {
       var tlFiles = tlWb.worksheets[0];
       var icrfSheet = null;
       var icrfWbNum = icrfWb.worksheets.length;
       if (icrfWbNum) icrfSheet = icrfWb.worksheets[0];
-      var tl = parseTROOPLIFT(tlFiles);
-      var combined = combineModels({ sheet: icrfSheet, workbook: icrfWb }, tl);
+      var tl = parseTROOPLIFT(tlFiles, school);
+      var combined = combineModels({ sheet: icrfSheet, workbook: icrfWb }, tl, school);
       return combined;
     },
     filterEntries: filterEntries,
