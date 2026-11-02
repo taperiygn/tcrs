@@ -283,7 +283,7 @@
     state.skipped = JSON.parse(JSON.stringify(state.pristine.skipped));
     normalizeTLLines();
     changed();
-    rerenderSrc();
+    rerenderSrc(true);
     state.touched = false;
     saveStore(true);                // forgets the edits on the server too
     toast('Restored the freshly parsed data.', false);
@@ -750,100 +750,143 @@
   }
 
   /* ================================================ Troop-lift view === */
-  function findTLLine(id) {
-    for (var i = 0; i < state.tlLines.length; i++) {
-      if (state.tlLines[i].id === String(id)) return state.tlLines[i];
-    }
-    return null;
-  }
-  function lineEntry(l) {
-    if (l.entryId) return findEntry(l.entryId);
-    if (l.status === 'ok' && l.row != null) return findEntry('t' + l.row);
-    return null;
-  }
+  /* The TL live sheet is one big editable text block: date headings and
+     one movement per line. It is only parsed when "Update" is pressed. */
 
-  function tlBlocks() {
-    var blocks = [], title = '', cur = null;
+  var TL_TITLE_RE = /^(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[A-Z]*\s*(\d{4})?\s*(TL)?\s*$/i;
+  var TL_DATE_RE = /^\*?\s*(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\s*(?:\(\s*\*?TBC\*?\s*\))?\*?\s*$/;
+
+  function tlText() {
+    var out = [];
     state.tlLines.forEach(function (l) {
-      if (l.kind === 'title') { title = l.text; return; }
+      if (l.kind === 'title') { if ((l.text || '').trim()) out.push(l.text.trim()); return; }
       if (l.kind === 'date') {
-        cur = { key: 'b' + l.row, date: l.date, tbc: !!l.tbc, lines: [] };
-        blocks.push(cur);
+        if ((l.text || '').trim()) { out.push(l.text.trim()); return; }
+        var p = (l.date || '').split('-');
+        if (p.length === 3) out.push((+p[2]) + '/' + (+p[1]) + (l.tbc ? ' (*TBC*)' : ''));
         return;
       }
-      if (!cur) { cur = { key: 'b0', date: null, lines: [] }; blocks.push(cur); }
-      cur.lines.push({ id: l.id, status: l.status || 'ok', text: l.text || '' });
+      var t = (l.text || '').trim();
+      if (t) out.push(t);
     });
-    return { blocks: blocks, title: title };
+    return out.join('\n') + (out.length ? '\n' : '');
   }
 
-  function commitTL(id, raw) {
-    var l = findTLLine(id);
-    if (!l) return { ok: false, msg: 'line not found' };
-    if (!raw) return { ok: false, msg: 'line is empty — use ✕ to delete it' };
-    var p = T.parseTLLineText(raw);
-    if (!p.ok) {
-      return { ok: false, msg: 'expected: <HHMM|TBC> <FROM> - <TO> <N> BUSES|TONNERS (<COY ACTIVITY>)' };
-    }
-    var e = lineEntry(l);
-    if (!e) {
-      e = {
-        id: (l.row != null && !l.entryId) ? 't' + l.row : l.id,
-        source: (l.status === 'new' || l.dup || l.entryId) ? 'MANUAL' : 'TROOPLIFT',
-        via: 'tl', rawText: raw,
-        date: l.date || '', eDate: l.date || '', dayDiff: 0, nextDay: false,
-        officer: '', phone: '', unit: '', row: l.row,
-        flagged: false, tbc: false, edited: true
+  function applyTLText(raw) {
+    var model = state.model;
+    if (!model) return { msg: 'nothing is loaded yet' };
+    if (!(raw || '').trim()) return { msg: 'the text is empty — nothing changed' };
+    var baseYear = model.year || new Date().getUTCFullYear();
+    var now = Date.now(), seq = 0;
+
+    /* old movement lines, grouped by their exact text — matching lines keep
+       their entries (and any edits) instead of being re-parsed */
+    var pool = {};
+    state.tlLines.forEach(function (l) {
+      if (l.kind !== 'line') return;
+      var t = (l.text || '').trim();
+      if (!t) return;
+      (pool[t] = pool[t] || []).push(l);
+    });
+
+    var lines = [], cur = null;
+    var added = 0, dropped = 0, bad = 0, total = 0, removalIds = [];
+
+    raw.split('\n').forEach(function (line) {
+      var t = line.trim();
+      if (!t) return;
+
+      /* title, e.g. "NOVEMBER TL" */
+      if (TL_TITLE_RE.test(t)) {
+        lines.push({ id: null, row: null, kind: 'title', date: null, text: t, status: '' });
+        return;
+      }
+      /* date heading, e.g. "23/11" or "23/11 (*TBC*)" */
+      var dm = TL_DATE_RE.exec(t);
+      if (dm) {
+        var y = dm[3] ? +dm[3] : baseYear;
+        if (y < 100) y += 2000;
+        cur = y + '-' + pad2(+dm[2]) + '-' + pad2(+dm[1]);
+        lines.push({ id: null, row: null, kind: 'date', date: cur, text: t, status: '', tbc: /\*\s*TBC\s*\*|\*TBC\*/.test(t) });
+        return;
+      }
+
+      /* movement line */
+      total++;
+      var lp = T.parseTLLineText(t);
+      var old = pool[t] && pool[t].length ? pool[t].shift() : null;
+      var nl = {
+        id: old ? old.id : ('m' + now + '-' + (++seq)),
+        row: old ? old.row : null, kind: 'line',
+        text: t, date: cur, status: lp.ok ? 'ok' : 'unparsed', entryId: null
       };
-      state.entries.push(e);
+      var e = old ? (old.entryId ? findEntry(old.entryId) : (old.row != null ? findEntry('t' + old.row) : null)) : null;
+
+      if (e && lp.ok) {
+        T.applyTLFields(e, lp.fields);
+        e.rawText = t;
+        if ((nl.date || '') !== (e.date || '')) {
+          e.date = nl.date || ''; e.eDate = e.date;
+          e.dayDiff = 0; e.nextDay = false; e.edited = true;
+        }
+        nl.entryId = e.id;
+      } else if (lp.ok) {
+        e = {
+          id: 'm' + now + '-' + (++seq) + 'e', source: 'TROOPLIFT', via: 'tl',
+          date: nl.date || '', eDate: nl.date || '', dayDiff: 0, nextDay: false,
+          officer: '', phone: '', unit: '', row: nl.row,
+          flagged: false, tbc: false, edited: true, rawText: t
+        };
+        T.applyTLFields(e, lp.fields);
+        nl.entryId = e.id;
+        state.entries.push(e);
+        added++;
+      } else {
+        if (e) removalIds.push(e.id);       // line text replaced by an unparseable one
+        bad++;
+      }
+      if (lp.ok) lp.fields.coys.forEach(registerCoy);
+      lines.push(nl);
+    });
+
+    if (!total) return { msg: 'no movement lines recognized — nothing changed' };
+
+    /* entries whose lines were deleted from the text (unconsumed pool) */
+    Object.keys(pool).forEach(function (t) {
+      pool[t].forEach(function (old) {
+        var e = old.entryId ? findEntry(old.entryId)
+          : (old.row != null ? findEntry('t' + old.row) : null);
+        if (e) removalIds.push(e.id);
+      });
+    });
+
+    /* entries whose lines no longer exist in the text */
+    if (removalIds.length) {
+      removalIds = removalIds.filter(function (id, i) { return removalIds.indexOf(id) === i; });
+      state.entries = state.entries.filter(function (e) { return removalIds.indexOf(e.id) === -1; });
+      dropped = removalIds.length;
     }
-    T.applyTLFields(e, p.fields);
-    e.edited = true;
-    e.date = l.date || e.date || '';
-    e.eDate = e.date;
-    e.dayDiff = 0; e.nextDay = false;
-    e.rawText = raw;
-    l.status = 'ok'; l.text = raw; l.entryId = e.id;
-    p.fields.coys.forEach(registerCoy);
+
+    state.tlLines = lines;
+    normalizeTLLines();
     saveStore();
     changed();
-    return { ok: true };
+    rerenderSrc();
+    return {
+      msg: total + (total === 1 ? ' line' : ' lines') + ' parsed · ' + (total - bad) + ' movements in the schedule' +
+        (bad ? ' · ' + bad + ' unrecognized (marked, kept as text)' : '') +
+        (added ? ' · ' + added + ' newly added' : '') +
+        (dropped ? ' · ' + dropped + ' deleted' : '')
+    };
   }
 
-  function addTLLine(blockKey) {
-    var b = tlBlocks().blocks.filter(function (x) { return String(x.key) === String(blockKey); })[0];
-    if (!b) return;
-    var idx = -1;
-    for (var i = 0; i < state.tlLines.length; i++) {
-      var l = state.tlLines[i];
-      if (l.kind === 'line' && (l.date || null) === (b.date || null)) idx = i;
-    }
-    var nl = { id: 'm' + Date.now(), row: null, kind: 'line', status: 'new', text: '', date: b.date || null, entryId: null };
-    if (idx > -1) state.tlLines.splice(idx + 1, 0, nl);
-    else state.tlLines.push(nl);
-    saveStore();
-    changed();
-    rerenderSrc();
-  }
-  function dupTLLine(id) {
-    var l = findTLLine(id);
-    if (!l) return;
-    var copy = { id: 'm' + Date.now() + Math.floor(Math.random() * 99), row: null, kind: 'line', status: 'new', text: l.text, date: l.date || null, entryId: null, dup: true };
-    state.tlLines.splice(state.tlLines.indexOf(l) + 1, 0, copy);
-    saveStore();
-    changed();
-    rerenderSrc();
-  }
-  function delTLLine(id) {
-    var l = findTLLine(id);
-    if (!l) return;
-    var e = lineEntry(l);
-    if (e) state.entries.splice(state.entries.indexOf(e), 1);
-    state.tlLines.splice(state.tlLines.indexOf(l), 1);
-    l.entryId && delete l.entryId;
-    saveStore();
-    changed();
-    rerenderSrc();
+  function tlNote() {
+    var days = 0, n = 0, bad = 0;
+    state.tlLines.forEach(function (l) {
+      if (l.kind === 'date') days++;
+      if (l.kind === 'line') { n++; if (l.status === 'unparsed') bad++; }
+    });
+    return (state.tlName || 'Troop lift') + ' · ' + days + ' days · ' + n + ' lines' + (bad ? ' · ' + bad + ' unparsed' : '');
   }
 
   /* ---------------------------------------------------------- tabs -- */
@@ -870,6 +913,8 @@
     $('tl-container').style.display = s === 'tl' ? '' : 'none';
     $('icrf-foot').style.display = s === 'icrf' ? '' : 'none';
     $('tl-foot').style.display = s === 'tl' ? '' : 'none';
+    $('grid-searchwrap').style.display = s === 'icrf' ? '' : 'none';
+    if (s !== 'icrf') $('grid-search').value = '';
     mountSrc();
     applySearch();
   }
@@ -888,24 +933,17 @@
       state.icrfGrid.rerender();
     }
     if (state.srcTab === 'tl' && !state.tlGrid) {
-      state.tlGrid = TCRSSheet.mountTL($('tl-container'), {
-        getBlocks: tlViewBlocks,
-        commitLine: commitTL,
-        dupLine: dupTLLine,
-        delLine: delTLLine,
-        addLine: addTLLine,
-        entryFor: entryForLine,
-        lineToEdit: lineToEdit,
-        note: tlNote
+      state.tlGrid = TCRSSheet.mountTLText($('tl-container'), {
+        getText: tlText, apply: applyTLText, note: tlNote
       });
     } else if (state.srcTab === 'tl') {
       state.tlGrid.rerender();
     }
   }
 
-  function rerenderSrc() {           // only the visible grid; the other redraws when shown
+  function rerenderSrc(fresh) {      // only the visible grid; the other redraws when shown
     if (state.srcTab === 'icrf' && state.icrfGrid) state.icrfGrid.rerender();
-    if (state.srcTab === 'tl' && state.tlGrid) state.tlGrid.rerender();
+    if (state.srcTab === 'tl' && state.tlGrid) state.tlGrid.rerender(fresh === true);
   }
 
   function applySearch() {
@@ -1309,11 +1347,20 @@
       return rem.join(' · ');
     }
 
+    function pageSetup(orientation) {
+      // Excel validates page readiness strictly: pageMargins must carry
+      // header/footer and the DPI values must be real numbers, or the file
+      // opens in repair mode ("unsupported elements / fixed the sheet").
+      return {
+        orientation: orientation, fitToPage: true, fitToWidth: 1, fitToHeight: 0,
+        horizontalDpi: 300, verticalDpi: 300,
+        margins: { left: 0.4, right: 0.4, top: 0.5, bottom: 0.5, header: 0.3, footer: 0.3 }
+      };
+    }
+
     /* sheet 1: By Date */
     {
-      var ws = wb.addWorksheet('By Date', {
-        pageSetup: { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0, margins: { left: 0.4, right: 0.4, top: 0.5, bottom: 0.5 } }
-      });
+      var ws = wb.addWorksheet('By Date', { pageSetup: pageSetup('landscape') });
       var cols = ['TIME', 'COY', 'ACTIVITY', 'FROM', 'TO', 'VEHICLES'];
       if (poc) cols.push('POC / CONTACT');
       cols.push('REMARKS');
@@ -1344,9 +1391,7 @@
 
     /* sheet 2: By Company */
     {
-      var ws2 = wb.addWorksheet('By Company', {
-        pageSetup: { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0, margins: { left: 0.4, right: 0.4, top: 0.5, bottom: 0.5 } }
-      });
+      var ws2 = wb.addWorksheet('By Company', { pageSetup: pageSetup('landscape') });
       var cols2 = ['DATE', 'DAY', 'TIME', 'ACTIVITY', 'FROM', 'TO', 'VEHICLES'];
       if (poc) cols2.push('POC / CONTACT');
       cols2.push('REMARKS');
@@ -1376,7 +1421,7 @@
 
     /* sheet 3: data notes */
     {
-      var ws3 = wb.addWorksheet('Data notes', { pageSetup: { orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0 } });
+      var ws3 = wb.addWorksheet('Data notes', { pageSetup: pageSetup('portrait') });
       ws3.columns = [{ width: 18 }, { width: 30 }, { width: 46 }, { width: 46 }];
       titleRows(ws3, 'DATA NOTES — SANITY CHECKS', 'Fixes and skipped rows found while parsing. Review before distributing.', 4);
       headerRow(ws3, ['AREA', 'WHERE', 'BEFORE', 'DETECTED']);
@@ -1391,6 +1436,10 @@
       });
       ws3.views = [{ state: 'frozen', ySplit: 4 }];
     }
+
+    /* open the workbook on the sheet that matches the grouping on screen */
+    var activeSheet = state.view === 'coy' ? 1 : 0;
+    wb.views = [{ activeTab: activeSheet, firstSheet: activeSheet }];
 
     var buf = await wb.xlsx.writeBuffer();
     var blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
@@ -1574,9 +1623,8 @@
     filteredEntries: filteredEntries,
     refresh: refresh,
     commitICRF: commitICRF,
-    commitTL: commitTL,
+    applyTLText: applyTLText, tlText: tlText,
     addIcrfRow: addIcrfRow, dupIcrf: dupIcrf, delIcrf: delIcrf,
-    dupTLLine: dupTLLine, delTLLine: delTLLine, addTLLine: addTLLine,
     resetEdits: resetEdits,
     flushSave: flushSave, flushSchedule: flushSchedule,
     setTab: setTab, setSrc: setSrc,

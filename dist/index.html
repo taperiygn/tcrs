@@ -15,7 +15,6 @@
       <div class="mark">S4</div>
       <div>
         <div class="t1">School 4 · Movement Builder</div>
-        <div class="t2">ICRF vehicles + Troop Lift buses → one clean schedule</div>
       </div>
     </div>
 
@@ -53,7 +52,6 @@
 </header>
 
 <main class="layout">
-  <!-- ============================================================ RAIL -->
   <aside class="rail">
 
     <div class="step-label"><span class="num">1</span> Source files</div>
@@ -152,14 +150,11 @@
 
   </aside>
 
-  <!-- ====================================================== WORKSPACE -->
   <section class="workspace">
 
-    <!-- ============================ SCHEDULE PANEL -->
     <div id="panel-schedule">
 
       <div class="empty card" id="empty-state">
-        <div class="empty-eyebrow">TWO FILES IN → ONE SCHEDULE OUT</div>
         <h2>Combine School 4 vehicles with troop-lift buses</h2>
         <p class="empty-sub">
           Drop this month's <b>ICRF</b> and <b>Troop Lift</b> workbooks on the left.
@@ -207,12 +202,10 @@
 
     </div>
 
-    <!-- ============================ LIVE SHEET PANEL -->
     <div id="panel-grid" style="display:none">
       <div class="sheet-panel card" id="sheet-panel">
 
         <div class="sheet-blank" id="sheet-blank">
-          <div class="empty-eyebrow">LIVE SHEET</div>
           <h2>Nothing to edit yet</h2>
           <p class="empty-sub">Load the month's <b>ICRF</b> and <b>Troop Lift</b> workbooks on the left —
             then come back here to edit the source sheets directly.</p>
@@ -231,7 +224,7 @@
             <button id="btn-src-tl">Troop lift · lines</button>
           </div>
           <div class="sheet-tools">
-            <div class="searchwrap inset">
+            <div class="searchwrap inset" id="grid-searchwrap">
               <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.7.7l.27.28v.79l5 4.99L20.49 19zm-6 0A4.5 4.5 0 1 1 14 9.5 4.5 4.5 0 0 1 9.5 14z"/></svg>
               <input id="grid-search" type="text" placeholder="Search…" spellcheck="false">
             </div>
@@ -249,10 +242,11 @@
           date shifts the end date so multi-day spans hold.
         </div>
         <div class="sheet-footnote" id="tl-foot">
-          The Troop Lift sheet in its original one-line-per-movement format — every
-          unit, exactly as in the workbook. Edit a line as raw text
-          (<b>0545 MTL - RHC 4 BUSES (7TH BOOK IN)</b>) and it re-parses; School 4
-          companies show as chips. Unparsed lines are marked and can be fixed in place.
+          The whole month's Troop Lift sheet as plain text — one movement per line
+          under its date heading (e.g. <b>0545 MTL - RHC 4 BUSES (7TH BOOK IN)</b>).
+          Edit freely, then press <b>Update</b> (or ⌘/Ctrl + Enter): the text is
+          parsed back into movements and the Schedule tab refreshes accordingly.
+          Unrecognized lines are kept and marked.
         </div>
 
       </div>

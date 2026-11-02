@@ -7,8 +7,8 @@
 <pre id="smoke-out">starting…</pre>
 <script>
 /* UI smoke: loads the real app.js against index.html's DOM and exercises
-   the redesigned LIVE SHEET (ICRF template grid + Troop-lift line list),
-   the schedule views, persistence and the styled export. */
+   the redesigned LIVE SHEET (ICRF template grid + Troop-lift bulk text
+   editor), the schedule views, persistence and the styled export. */
 (async function () {
   var out = [], failures = 0;
   function ok(name, cond, extra) {
@@ -113,59 +113,51 @@
     ok('schedule reflects the ICRF edit after switching tabs', shown && !A.state.scheduleStale, 'not found');
     A.setTab('grid');
 
-    /* ---------- Troop-lift one-column view ---------- */
+    /* ---------- Troop-lift bulk text editor ---------- */
     A.setSrc('tl');
-    var blocks = document.querySelectorAll('#tl-container .tl-block');
     var days = 0;
     A.state.tlLines.forEach(function (l) { if (l.kind === 'date') days++; });
-    ok('TL blocks match the sheet dates', blocks.length === days, blocks.length + '/d' + days);
-    ok('TL line text is the raw sheet text',
-      txt(document.querySelector('#tl-container .tl-line .tl-text')).length > 10,
-      txt(document.querySelector('#tl-container .tl-line .tl-text')));
-    ok('schedule lines carry coy chips',
-      document.querySelectorAll('#tl-container .tl-line .coychip').length > 50,
-      document.querySelectorAll('#tl-container .tl-line .coychip').length);
+    var ta = document.querySelector('#tl-container .tl-editor');
+    ok('TL editor holds the month as one text block',
+      !!ta && ta.value.indexOf('NOVEMBER') === 0 && ta.value.split('\n').length > 300,
+      ta ? ta.value.length : 'no textarea');
+    var searchBox = document.getElementById('grid-searchwrap');
+    ok('search hidden on the TL text editor', searchBox.style.display === 'none', searchBox.style.display);
 
-    /* add a line under the first date, commit, verify re-parse → schedule */
-    var firstDate = A.state.tlLines.filter(function (l) { return l.kind === 'date'; })[0];
-    A.addTLLine('b' + firstDate.row);
-    var newLine = A.state.tlLines.filter(function (l) { return l.status === 'new'; })[0];
-    ok('add-line creates a blank line', !!newLine, 'none');
+    /* add a movement at the end, press Update, verify re-parse → schedule */
     var n0 = A.state.entries.length;
-    var rtl = A.commitTL(newLine.id, '0915 MTL - RHC 2 BUSES (7TH TL TEST EDIT)');
-    ok('TL line re-parses into an entry', rtl.ok, JSON.stringify(rtl));
+    ta.value = ta.value + '\n0915 MTL - RHC 2 BUSES (7TH TL TEST EDIT)';
+    ta.dispatchEvent(new Event('input', { bubbles: true }));
+    document.querySelector('#tl-container .tl-apply').click();
     var added = A.state.entries.filter(function (e) { return e.activity === 'TL TEST EDIT'; })[0];
-    ok('TL edit lands in schedule entries', !!added && added.timeStart === '0915' &&
+    ok('Update parses the edited text into an entry', !!added && added.timeStart === '0915' &&
       added.qty === 2 && added.kind === 'bus', added && JSON.stringify(added));
+    ok('Update reports what it parsed', txt(document.querySelector('#tl-container .tl-editor-status')).length > 5,
+      txt(document.querySelector('#tl-container .tl-editor-status')));
     A.setTab('schedule');
     shown = Array.prototype.some.call(document.querySelectorAll('#content .act'),
       function (n) { return n.textContent === 'TL TEST EDIT'; });
     A.setTab('grid');
-    ok('schedule view reflects the TL line', shown, 'not found');
+    ok('schedule view reflects the TL text after switching tabs', shown, 'not found');
 
-    var badTL = A.commitTL(newLine.id, 'not a movement line');
-    ok('bad TL text rejected', !badTL.ok, JSON.stringify(badTL));
-    A.delTLLine(newLine.id);
-    ok('TL line delete removes its entry', A.state.entries.length === n0, A.state.entries.length);
+    /* an unrecognized line is kept and marked, and Update removes nothing else */
+    ta.value = ta.value + '\nnot a movement line';
+    ta.dispatchEvent(new Event('input', { bubbles: true }));
+    document.querySelector('#tl-container .tl-apply').click();
+    var badLine = A.state.tlLines.filter(function (l) { return l.status === 'unparsed'; })[0];
+    ok('unrecognized line kept and marked', !!badLine && A.state.entries.filter(function (e) { return e.activity === 'TL TEST EDIT'; }).length === 1,
+      JSON.stringify(A.state.tlLines.filter(function (l) { return l.status === 'unparsed'; })));
 
-    var rdup = A.dupTLLine(findFirstParsedLineId());
-    ok('dup TL line', A.state.tlLines.filter(function (l) { return l.dup; }).length === 1);
-    A.delTLLine(findFirstParsedLineId());
-
-    function findFirstParsedLineId() {
-      for (var i = 0; i < A.state.tlLines.length; i++) {
-        var l = A.state.tlLines[i];
-        if (l.kind === 'line' && l.status === 'ok') return l.id;
-      }
-      return null;
-    }
-
-    /* real click-to-edit on a TL line (regression: lineToEdit) */
-    var lineEl = document.querySelector('#tl-container .tl-line .tl-text').parentElement;
-    lineEl.click();
-    var tin = lineEl.querySelector('input');
-    ok('clicking a TL line opens an editor', !!tin);
-    if (tin) { tin.value = tin.value; tin.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); }
+    /* deleting a line from the text removes its entry */
+    var cleaned = ta.value.split('\n').filter(function (l) {
+      return l.indexOf('not a movement line') === -1 && l.indexOf('TL TEST EDIT') === -1;
+    }).join('\n');
+    ta.value = cleaned;
+    ta.dispatchEvent(new Event('input', { bubbles: true }));
+    document.querySelector('#tl-container .tl-apply').click();
+    ok('removed lines drop their entries',
+      A.state.entries.length === n0 && !A.state.entries.some(function (e) { return e.activity === 'TL TEST EDIT'; }),
+      A.state.entries.length - n0);
 
     /* real UI edit in the ICRF grid leaves exactly one row per id */
     A.setSrc('icrf');

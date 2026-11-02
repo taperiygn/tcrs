@@ -86,7 +86,6 @@ body {
   display: grid; place-items: center; letter-spacing: .4px;
 }
 .brand .t1 { font-weight: 700; font-size: 16px; white-space: nowrap; color: var(--ink); letter-spacing: -0.02em; }
-.brand .t2 { font-size: 11.5px; color: var(--ink-faint); margin-top: 1px; white-space: nowrap; }
 
 .tabs {
   margin-left: 8px;
@@ -293,8 +292,7 @@ body.tab-grid .rail { display: none; }
 .workspace { min-width: 0; position: relative; }
 
 .empty { padding: 46px 40px 44px; text-align: center; }
-.empty-eyebrow { font-size: 12px; font-weight: 800; letter-spacing: .16em; color: var(--lav-ink); }
-.empty h2 { margin: 10px 0 8px; font-size: 27px; color: var(--ink); letter-spacing: -0.03em; font-weight: 700; }
+.empty h2 { margin: 0 0 8px; font-size: 27px; color: var(--ink); letter-spacing: -0.03em; font-weight: 700; }
 .empty-sub { margin: 0 auto; color: var(--ink-soft); font-size: 14px; max-width: 600px; line-height: 1.65; }
 .empty .pipe { margin: 30px auto 0; display: flex; justify-content: center; flex-wrap: wrap; gap: 14px; }
 .empty .pipenode {
@@ -647,6 +645,25 @@ table.mov .datecell .dow { color: var(--lav-ink); font-weight: 700; margin-left:
 }
 .tl-add:hover { background: var(--lav); border-color: var(--lav-ink); }
 .tl-none { padding: 30px; text-align: center; color: var(--ink-faint); font-style: italic; }
+
+/* TL bulk text editor */
+.tl-editor-wrap {
+  flex: 1; min-height: 0;
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 12px 16px 6px;
+}
+.tl-editor {
+  flex: 1; min-height: 320px; width: 100%; resize: vertical;
+  font-family: var(--mono); font-size: 12px; line-height: 1.55;
+  color: var(--ink);
+  background: var(--surface-2);
+  border: 1px solid var(--line); border-radius: 10px;
+  padding: 10px 12px;
+  tab-size: 4;
+}
+.tl-editor:focus { outline: none; border-color: var(--lav-deep); background: #fff; }
+.tl-editor-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.tl-editor-status { font-size: 11.5px; color: var(--ink-faint); line-height: 1.45; }
 .cell-error { background: var(--rose) !important; box-shadow: inset 0 0 0 1.5px #eaa3b5; border-radius: 4px; }
 
 /* ------------------------------------------------------------ toast */
@@ -676,7 +693,6 @@ table.mov .datecell .dow { color: var(--lav-ink); font-weight: 700; margin-left:
 @media (max-width: 640px) {
   .statsbar { grid-template-columns: repeat(2, 1fr); }
   .layout { padding: 16px 14px 50px; }
-  .brand .t2 { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }

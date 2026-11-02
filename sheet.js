@@ -356,5 +356,60 @@
     };
   }
 
-  window.TCRSSheet = { mount: mount, mountTL: mountTL };
+  window.TCRSSheet = {
+    mount: mount,
+    mountTL: mountTL,
+    mountTLText: mountTLText
+  };
+
+  /* ====================================== bulk TL text editor == */
+  /* The whole month's Troop-lift sheet as one editable block of text
+     (date headings + one movement per line). Nothing is parsed until
+     "Update" is pressed, then the text is converted back to entries. */
+  function mountTLText(container, opts) {
+    container.classList.add('sheet', 'tl-textmode');
+    container.innerHTML =
+      '<div class="tl-editor-wrap">' +
+      '<textarea class="tl-editor" spellcheck="false" wrap="soft"></textarea>' +
+      '<div class="tl-editor-foot">' +
+      '<span class="tl-editor-status"></span>' +
+      '<button class="btn btn-primary sm tl-apply" type="button" title="Parse this text back into movements and update the schedule">Update</button>' +
+      '</div>' +
+      '</div>';
+
+    var ta = container.querySelector('.tl-editor');
+    var statusEl = container.querySelector('.tl-editor-status');
+    var applyBtn = container.querySelector('.tl-apply');
+    var state = { dirty: false, scrollTop: 0 };
+
+    ta.value = opts.getText();
+    ta.addEventListener('input', function () { state.dirty = true; });
+    ta.addEventListener('scroll', function () { state.scrollTop = ta.scrollTop; });
+
+    function apply() {
+      var res = opts.apply(ta.value) || { msg: '' };
+      state.dirty = false;
+      statusEl.textContent = res.msg || '';
+      var note = container.parentElement.querySelector('.sheet-note');
+      if (note && typeof opts.note === 'function') note.textContent = opts.note();
+      ta.scrollTop = state.scrollTop;
+    }
+
+    applyBtn.addEventListener('click', apply);
+    ta.addEventListener('keydown', function (ev) {
+      if ((ev.metaKey || ev.ctrlKey) && !ev.shiftKey && ev.key === 'Enter') {
+        ev.preventDefault();
+        apply();
+      }
+    });
+
+    return {
+      rerender: function (fresh) {
+        if (fresh) state.dirty = false;
+        if (fresh || !state.dirty) ta.value = opts.getText();
+        statusEl.textContent = fresh ? '' : statusEl.textContent;
+      },
+      setSearch: function () { }
+    };
+  }
 })();
