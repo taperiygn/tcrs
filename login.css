@@ -32,3 +32,11 @@ button {
 button:hover:not(:disabled) { background: #c2b9f3; }
 button:disabled { opacity: .6; cursor: wait; }
 button:focus-visible { outline: 2px solid #5a4fb8; outline-offset: 2px; }
+.tunnel { margin: 22px 0 0; text-align: left; }
+.t-label { font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #9a96b0; margin-bottom: 7px; }
+.t-url {
+  display: block; width: 100%; text-align: left; font: inherit; font-size: 13px; font-weight: 650;
+  color: #4b3a91; background: #f1eefb; border: 1px dashed #cfc8f7; border-radius: 10px;
+  padding: 9px 12px; word-break: break-all; line-height: 1.35; cursor: pointer;
+}
+.t-url:hover { background: #e8e4fb; }

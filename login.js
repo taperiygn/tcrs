@@ -1,4 +1,22 @@
 (function () {
+  /* current public tunnel link (injected by the server when the tunnel is up) */
+  var tunnel = window.__TCRS_TUNNEL;
+  if (tunnel) {
+    var host = document.querySelector('.login');
+    var box = document.createElement('div');
+    box.className = 'tunnel';
+    box.innerHTML = '<div class="t-label">Public link · tap to copy</div>' +
+      '<button type="button" class="t-url" id="t-url"></button>';
+    host.appendChild(box);
+    var btn = box.querySelector('.t-url');
+    btn.textContent = tunnel;
+    btn.addEventListener('click', function () {
+      try { navigator.clipboard && navigator.clipboard.writeText(tunnel); } catch (e) { }
+      btn.textContent = 'Copied ✓';
+      setTimeout(function () { btn.textContent = tunnel; }, 1300);
+    });
+  }
+
   var form = document.getElementById('form');
   var msg = document.getElementById('msg');
   var go = document.getElementById('go');

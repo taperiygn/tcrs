@@ -313,6 +313,20 @@ class Handler(BaseHTTPRequestHandler):
         self.send_bytes(200, path.read_bytes(), TYPES.get(path.suffix, "application/octet-stream"),
                         cache="no-cache")
 
+    def serve_login(self):
+        """The login page, with the current public tunnel link baked in so it
+        is visible (and copyable) right where you'd be typing the password."""
+        path = (SITE_DIR / "login.html").resolve()
+        if not path.is_file():
+            return self.send_json(404, {"error": "not found"})
+        html = path.read_text(encoding="utf-8")
+        tunnel = tunnel_url()
+        if tunnel and '<script src="login.js"></script>' in html:
+            html = html.replace('<script src="login.js"></script>',
+                                "<script>window.__TCRS_TUNNEL=%s;</script>\n<script src=\"login.js\"></script>"
+                                % json.dumps(tunnel), 1)
+        self.send_bytes(200, html.encode("utf-8"), "text/html", cache="no-cache")
+
     # -- routes
     def do_HEAD(self):
         self.do_GET()
@@ -324,6 +338,8 @@ class Handler(BaseHTTPRequestHandler):
         if path in PUBLIC:
             if path == "/login" and self.authed():
                 return self.redirect("/")
+            if path == "/login":
+                return self.serve_login()
             return self.serve_file(PUBLIC[path])
         if not self.authed():
             if path.startswith("/api/"):
@@ -404,6 +420,24 @@ class Handler(BaseHTTPRequestHandler):
         AUTH.record_fail(ip)
         time.sleep(0.6)
         self.send_json(401, {"error": "Wrong password."})
+
+
+# ------------------------------------------------------- tunnel link page --
+def tunnel_url():
+    """Public trycloudflare address currently in the tunnel log ('' if none)."""
+    # launchd supervisor logs under ~/Library/Logs (outside macOS's Documents
+    # privacy wall); fall back to a manually started tunnel's data/ log
+    for log in (Path.home() / "Library" / "Logs" / "tcrs" / "cloudflared.log",
+                DATA_DIR / "cloudflared.log"):
+        try:
+            lines = log.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            continue
+        for line in reversed(lines[-300:]):
+            m = re.search(r"https://[a-z0-9][a-z0-9-]*\.trycloudflare\.com", line)
+            if m:
+                return m.group(0)
+    return ""
 
 
 # ---------------------------------------------------- google sheets fetch --
