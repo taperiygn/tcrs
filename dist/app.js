@@ -1864,35 +1864,9 @@
       location.href = '/login';
     });
 
-    $('btn-sample').addEventListener('click', async function () {
-      try {
-        var a = await fetch('samples/ICRF.xlsx');
-        var b = await fetch('samples/Troop Lift Sample.xlsx');
-        if (!a.ok || !b.ok) throw new Error('not served');
-        var ab = await a.arrayBuffer(); var bb = await b.arrayBuffer();
-        state.icrfWb = await loadWorkbook(ab); state.icrfName = 'ICRF.xlsx (sample)';
-        state.tlWb = await loadWorkbook(bb); state.tlName = 'Troop Lift Sample.xlsx (sample)';
-        rememberFile('icrf', state.icrfName, ab);
-        rememberFile('tl', state.tlName, bb);
-        renderUploadStatus('icrf', { ok: true, msg: 'sample workbook — ' + state.icrfWb.worksheets[0].name });
-        renderUploadStatus('tl', { ok: true, msg: 'sample workbook — ' + state.tlWb.worksheets[0].name });
-        maybeCombine();
-      } catch (err) {
-        toast('Could not auto-load samples (works only over a local web server — e.g. <b>python3 -m http.server</b>). Drop the files manually instead.', true);
-      }
-    });
-
     document.querySelectorAll('.acc-head').forEach(function (h) {
       h.addEventListener('click', function () { h.parentElement.classList.toggle('open'); });
     });
-  }
-
-  /* auto-load samples when URL arrives with #auto (preview / demo shortcut) */
-  if (/^#auto/.test(location.hash)) {
-    if (location.hash === '#auto-coy') state.view = 'coy';
-    if (location.hash === '#auto-grid') state.tab = 'grid';
-    if (location.hash === '#auto-tl') { state.tab = 'grid'; state.srcTab = 'tl'; }
-    setTimeout(function () { $('btn-sample').click(); }, 60);
   }
 
   (function () {

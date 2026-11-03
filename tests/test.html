@@ -19,14 +19,14 @@
 
   async function main() {
     try {
-      var [icrfBuf, tlBuf] = await Promise.all([
-        fetch('../samples/ICRF.xlsx').then(function (r) { return r.arrayBuffer(); }),
-        fetch('../samples/Troop Lift Sample.xlsx').then(function (r) { return r.arrayBuffer(); })
-      ]);
-      var wbA = new ExcelJS.Workbook(); await wbA.xlsx.load(icrfBuf);
-      var wbB = new ExcelJS.Workbook(); await wbB.xlsx.load(tlBuf);
+      document.getElementById('out').textContent = 'Sample workbook fixtures were removed before publish. Load workbook files manually to run parser tests.';
+      out.push('SKIP  parser tests require user-uploaded workbook fixtures');
+      document.title = 'SAMPLE WORKBOOKS REMOVED';
+      return;
+
+      // Legacy fixture-backed parser checks removed from the published repo.
       var T = window.TCRS;
-      var model = T.parseWorkbooks({ worksheets: wbA.worksheets }, { worksheets: wbB.worksheets });
+      var model = null;
 
       ok('month detected = NOV (11)', model.month === 11, model.month);
       ok('year = 2026', model.year === 2026, model.year);

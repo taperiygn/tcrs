@@ -95,8 +95,8 @@ long passphrase; anyone who has it can read and change the schedule.
 
 ### Static-only mode
 
-Any static server also works (needed just for the *Samples* button; drag-and-drop works
-even from `file://`). Edits then persist in this browser's `localStorage` only:
+Any static server also works for a browser-only session with drag-and-drop uploads.
+Edits then persist in this browser's `localStorage` only:
 
 ```bash
 python3 -m http.server 8000

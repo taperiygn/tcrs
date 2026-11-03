@@ -73,8 +73,6 @@ PROTECTED = {
     "/": "index.html", "/index.html": "index.html", "/styles.css": "styles.css",
     "/app.js": "app.js", "/sheet.js": "sheet.js", "/parser.js": "parser.js",
     "/vendor/exceljs.min.js": "vendor/exceljs.min.js",
-    "/samples/ICRF.xlsx": "samples/ICRF.xlsx",
-    "/samples/Troop Lift Sample.xlsx": "samples/Troop Lift Sample.xlsx",
 }
 TYPES = {
     ".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8",

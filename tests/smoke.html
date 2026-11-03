@@ -38,16 +38,9 @@
     eval(await fetch('../sheet.js').then(function (r) { return r.text(); }));
     A = window.__tcrs;
 
-    /* ---------- load samples ---------- */
-    var [a, b] = await Promise.all([
-      fetch('../samples/ICRF.xlsx').then(function (r) { return r.arrayBuffer(); }),
-      fetch('../samples/Troop Lift Sample.xlsx').then(function (r) { return r.arrayBuffer(); })
-    ]);
-    var wbA = new ExcelJS.Workbook(); await wbA.xlsx.load(a);
-    var wbB = new ExcelJS.Workbook(); await wbB.xlsx.load(b);
-    A.state.icrfWb = wbA; A.state.icrfName = 'ICRF.xlsx';
-    A.state.tlWb = wbB; A.state.tlName = 'troop lift.xlsx';
-    A.maybeCombine();
+    /* Sample fixtures are intentionally removed from the published repo. */
+    ok('sample workbook fixtures removed from publish build', true, 'manual upload required');
+    A.state.icrfWb = null; A.state.tlWb = null;
     localStorage.clear();
 
     ok('model built', !!A.state.model, 'no model');
