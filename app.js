@@ -755,6 +755,39 @@
     changed();
     rerenderSrc();
   }
+  /* insert a blank row directly below `afterId` (hover-insert handle) */
+  function insertIcrfAfter(afterId) {
+    var e = findEntry(afterId);
+    var idx, row, src;
+    if (e) {
+      idx = state.entries.indexOf(e) + 1;
+      row = e.row == null ? 0 : e.row + 0.05;   // stays right below (same trick as duplicate)
+      src = e;
+    } else if (afterId && afterId.charAt(0) === 's') {
+      var sk = state.skipped[+afterId.slice(1)];
+      if (!sk) return null;
+      row = numRow(sk.row) + 0.05;              // below the skipped sheet row
+      idx = state.entries.length;
+      src = null;
+    } else return null;
+    var coy = (src && src.coys && src.coys[0]) || enabledCoys()[0] || T.schoolCompanies(state.school)[0];
+    var nid = 'm' + Date.now() + '-' + Math.random().toString(36).slice(2, 6);
+    state.entries.splice(idx, 0, {
+      id: nid, source: 'MANUAL', via: 'icrf',
+      date: (src && src.date) || '', eDate: (src && src.eDate) || '',
+      dayDiff: (src && src.dayDiff) || 0, nextDay: !!(src && src.nextDay),
+      coys: [coy], coyLabel: coy, activity: '',
+      timeStart: (src && src.timeStart) || '', timeEnd: (src && src.timeEnd) || '',
+      from: (src && src.from) || '', to: (src && src.to) || '',
+      qty: null, vehicleType: (src && src.vehicleType) || '', kind: (src && src.kind) || 'veh',
+      officer: '', phone: '', unit: '', reqTo: '',
+      flagged: false, tbc: false, row: row, edited: true
+    });
+    saveStore();
+    changed();
+    return nid;
+  }
+
   function dupIcrf(id) {
     var e = findEntry(id);
     if (!e) return;
@@ -961,6 +994,7 @@
         getRows: icrfRows,
         commit: commitICRF,
         onAdd: addIcrfRow, onDup: dupIcrf, onDel: delIcrf,
+        onInsertAfter: insertIcrfAfter,
         note: rowsNote
       });
     } else if (state.srcTab === 'icrf') {

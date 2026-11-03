@@ -19,7 +19,7 @@
   /* ==================================================== generic grid == */
   function mount(container, opts) {
     T = window.TCRS;
-    var state = { search: '', editing: null, scrollTop: 0 };
+    var state = { search: '', editing: null, scrollTop: 0, hoverT: null };
     container.classList.add('sheet');
     container.innerHTML =
       '<div class="sheet-scroll" tabindex="-1">' +
@@ -99,6 +99,7 @@
     }
 
     function beginEdit(td) {
+      clearHover();
       var tr = td.closest('tr');
       var id = tr.dataset.id, key = td.dataset.key;
       var r = opts.getRows().filter(function (x) { return String(x.id) === String(id); })[0];
@@ -170,8 +171,50 @@
       return tds[colIdx] || null;
     }
 
+    /* -------------------------------------- hover-insert (ICRF grid) -- */
+    /* Hold the pointer on a row for ~0.25s and a "+ insert row here"
+       strip appears below it; clicking adds a blank row there. */
+    function clearHover() {
+      if (state.hoverT) { clearTimeout(state.hoverT); state.hoverT = null; }
+      var strip = tbody.querySelector('tr.row-insert');
+      if (strip) strip.remove();
+    }
+    function armHover(tr) {
+      clearHover();
+      state.hoverT = setTimeout(function () {
+        if (state.editing || !opts.onInsertAfter) return;
+        var strip = document.createElement('tr');
+        strip.className = 'row-insert';
+        strip.dataset.after = tr.dataset.id;
+        strip.innerHTML = '<td colspan="20">＋ insert row here</td>';
+        tr.insertAdjacentElement('afterend', strip);
+      }, 250);
+    }
+    tbody.addEventListener('mouseover', function (ev) {
+      var tr = ev.target.closest('tr');
+      if (!tr || tr.classList.contains('sheet-empty') || tr.classList.contains('row-insert')) return;
+      if (state.editing || !opts.onInsertAfter) return;
+      if (state.hoverT) { clearTimeout(state.hoverT); state.hoverT = null; }
+      var strip = tbody.querySelector('tr.row-insert');
+      if (strip && strip.previousElementSibling === tr) return;   // already armed here
+      if (strip) strip.remove();
+      armHover(tr);
+    });
+    tbody.addEventListener('mouseleave', clearHover);
+
     /* ------------------------------------------------------- events */
     tbody.addEventListener('click', function (ev) {
+      var strip = ev.target.closest('tr.row-insert');
+      if (strip) {
+        var afterId = strip.dataset.after;
+        clearHover();
+        var newId = opts.onInsertAfter(afterId);
+        drawBody();
+        var tr2 = newId && tbody.querySelector('tr[data-id="' + newId + '"]');
+        var first = tr2 && tr2.querySelector('td[data-key]');
+        if (first) beginEdit(first);        // jump straight into the new row
+        return;
+      }
       var btn = ev.target.closest('.g-btn');
       if (btn) {
         var tr0 = ev.target.closest('tr'); var id = tr0 ? tr0.dataset.id : null;

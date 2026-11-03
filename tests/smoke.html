@@ -64,6 +64,29 @@
     ok('ICRF subtab on by default', document.getElementById('btn-src-icrf').classList.contains('on'));
     var icrfRows = document.querySelectorAll('#icrf-container tbody tr');
     ok('ICRF grid has 91 rows (86 entries + 5 skipped)', icrfRows.length === 91, icrfRows.length);
+
+    /* ---------- hover-insert row (0.25s) ---------- */
+    var nBefore = A.state.entries.length;
+    var idsBefore = A.state.entries.map(function (e) { return e.id; });
+    var hoverTr = document.querySelector('#icrf-container tbody tr[data-id]');
+    var hoverId = hoverTr.dataset.id;
+    hoverTr.querySelector('td[data-key]').dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+    await new Promise(function (r) { setTimeout(r, 450); });
+    var strip = document.querySelector('#icrf-container tr.row-insert');
+    ok('hovering 0.25s arms the insert strip', !!strip &&
+      strip.dataset.after === hoverId,
+      strip ? '' : 'no strip after 0.45s');
+    strip.click();
+    var added = A.state.entries.filter(function (e) { return idsBefore.indexOf(e.id) === -1; });
+    var trs = [].slice.call(document.querySelectorAll('#icrf-container tbody tr:not(.sheet-empty)'));
+    var iHover = trs.indexOf(trs.filter(function (t) { return t.dataset.id === hoverId; })[0]);
+    var iNew = trs.indexOf(trs.filter(function (t) { return added[0] && t.dataset.id === added[0].id; })[0]);
+    ok('strip click inserts a blank row directly below the hovered one',
+      A.state.entries.length === nBefore + 1 && added.length === 1 &&
+      added[0].source === 'MANUAL' && added[0].activity === '' && iNew === iHover + 1,
+      'n=' + A.state.entries.length + ' iHover=' + iHover + ' iNew=' + iNew);
+    A.state.entries.pop();               // keep later counts intact
+    A.refresh();
     ok('ICRF rows show template text in the first cell',
       Array.prototype.some.call(document.querySelectorAll('#icrf-container td.c-colA'),
         function (td) { return txt(td).indexOf('SCH 4 - ') === 0; }),
