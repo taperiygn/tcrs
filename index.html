@@ -75,6 +75,25 @@
         <div class="upstatus" id="icrf-status" hidden></div>
       </div>
 
+      <div class="gs-wrap">
+        <div class="gs-linked" id="gs-linked" hidden>
+          <div class="gs-linked-top">
+            <span class="badge-icrf">SRC</span>
+            <b id="gs-linked-name"></b>
+          </div>
+          <div class="gs-sub"><span id="gs-linked-info"></span></div>
+          <div class="gs-acts">
+            <button type="button" class="g-btn" id="btn-gs-now">Fetch now</button>
+            <button type="button" class="g-btn subtle" id="btn-gs-unlink">unlink</button>
+          </div>
+        </div>
+        <div class="gs-paste">
+          <input type="url" id="gs-url" placeholder="Paste Google Sheets ICRF link…" autocomplete="off" spellcheck="false">
+          <button type="button" class="g-btn" id="btn-gs-use">Link</button>
+        </div>
+        <div class="gs-err" id="gs-err" hidden></div>
+      </div>
+
       <div class="upcard inset" id="up-tl">
         <label class="upzone" for="file-tl">
           <input type="file" id="file-tl" accept=".xlsx,.xlsm">

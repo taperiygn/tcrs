@@ -207,8 +207,9 @@
     for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
     return bytes.buffer;
   }
-  function rememberFile(which, name, buf) {
+  function rememberFile(which, name, buf, extra) {
     state.files[which] = { name: name, b64: bufToB64(buf) };
+    if (extra) { state.files[which].gs = extra.gs; state.files[which].gsAt = extra.gsAt; }
     remote.filesDirty = true;
     remote.localFilesDirty = true;
   }
@@ -427,7 +428,7 @@
     state.files[which] = null;
     remote.filesDirty = remote.localFilesDirty = false;
     if (hadKey) forgetFiles(hadKey);
-    if (which === 'icrf') { state.icrfWb = null; state.icrfName = ''; $('file-icrf').value = ''; }
+    if (which === 'icrf') { state.icrfWb = null; state.icrfName = ''; state._gsCsv = null; $('file-icrf').value = ''; renderGsRow(); }
     else { state.tlWb = null; state.tlName = ''; $('file-tl').value = ''; }
     var box = $(which === 'icrf' ? 'icrf-status' : 'tl-status');
     var card = $(which === 'icrf' ? 'up-icrf' : 'up-tl');
@@ -436,7 +437,242 @@
     maybeCombine();
   }
 
-  /* -------------------------------------------------------- combine -- */
+  /* ------------------------------------------- google sheets ICRF source -- */
+  /* A shared Google Sheet can stand in for the ICRF workbook. The site every
+     15 minutes re-fetches the sheet (through the server, since the browser
+     cannot read it directly) and refreshes the vehicles — user edits whose
+     row still exists are kept, manual rows always survive, rows removed in
+     the sheet disappear. Nothing is deleted from the sheet itself. */
+  var SHEET_INTERVAL = 15 * 60 * 1000, sheetSyncing = false, sheetIo = null;
+
+  function gsMeta() { return (state.files && state.files.icrf && state.files.icrf.gs) || null; }
+
+  function parseCsv(text) {
+    if (!text) return [];
+    if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
+    var rows = [], row = [], f = '', i = 0, q = false;
+    function endField() { row.push(f); f = ''; }
+    function endRow() { endField(); rows.push(row); row = []; }
+    while (i < text.length) {
+      var c = text.charAt(i);
+      if (q) {
+        if (c === '"') {
+          if (text.charAt(i + 1) === '"') { f += '"'; i += 2; continue; }
+          q = false; i++; continue;
+        }
+        f += c; i++; continue;
+      }
+      if (c === '"') { q = true; i++; continue; }
+      if (c === ',') { endField(); i++; continue; }
+      if (c === '\r') { i++; continue; }
+      if (c === '\n') { endRow(); i++; continue; }
+      f += c; i++;
+    }
+    if (f !== '' || row.length) endRow();
+    return rows;
+  }
+
+  function csvToWorkbook(rows) {
+    var wb = new ExcelJS.Workbook();
+    var ws = wb.addWorksheet('ICRF');
+    rows.forEach(function (r) {
+      if (!r.some(function (c) { return String(c || '').trim() !== ''; })) return;
+      ws.addRow(r);
+    });
+    return wb;
+  }
+
+  /* the Google Sheet is the single most accurate source: on refresh its ICRF
+     rows override everything stored earlier, including the user's older
+     edits; sheet rows that no longer exist are dropped. Troop Lift rows and
+     manual rows the user built in the app (which the sheet cannot contain)
+     are kept, so their own work never silently disappears. */
+  function mergeEntries(fresh, prev) {
+    var freshBy = {};
+    fresh.forEach(function (e) { if (e.source === 'ICRF') freshBy[e.id] = e; });
+    var merged = [];
+    prev.forEach(function (e) {
+      if (e.source === 'ICRF') {
+        if (freshBy[e.id]) merged.push(JSON.parse(JSON.stringify(freshBy[e.id])));   // sheet wins
+        /* else: the row is gone from the sheet — it disappears */
+      } else {
+        merged.push(JSON.parse(JSON.stringify(e)));                                   // TL / manual rows kept
+      }
+    });
+    prev.forEach(function (e) { if (e.source === 'ICRF') delete freshBy[e.id]; });
+    fresh.forEach(function (e) {          // sheet rows added since last sync
+      if (freshBy[e.id]) merged.push(JSON.parse(JSON.stringify(e)));
+    });
+    return merged;
+  }
+
+  function gsEscape(url) { return encodeURIComponent(String(url || '').trim()); }
+
+  async function fetchSheet(url) {
+    var r = await fetch('/api/sheet?url=' + gsEscape(url),
+      { credentials: 'same-origin', headers: { 'X-TCRS': '1' } });
+    if (r.status === 401) { location.href = '/login'; throw new Error('login required'); }
+    if (!r.ok) throw new Error((await r.json().catch(function () { return {}; })).error || 'HTTP ' + r.status);
+    return r.json();
+  }
+
+  function gsStatus(msg, isErr) {
+    var box = $('gs-err');
+    box.hidden = !msg;
+    box.textContent = msg || '';
+    box.classList.toggle('err', isErr === true);
+  }
+
+  function renderGsRow() {
+    var link = gsMeta();
+    var row = $('gs-linked');
+    row.hidden = !link;
+    if (link) {
+      $('gs-linked-name').textContent = state.files.icrf.name || 'Google Sheets ICRF';
+      var at = state.files.icrf.gsAt && new Date(state.files.icrf.gsAt);
+      $('gs-linked-info').textContent = 'auto-updates every 15 min' +
+        (at ? ' · last sync ' + ('0' + at.getHours()).slice(-2) + ':' + ('0' + at.getMinutes()).slice(-2) : '');
+    }
+    $('gs-url').placeholder = link ? 'Replace with another Google Sheets link…' : 'Paste Google Sheets ICRF link…';
+    $('gs-url').value = '';
+  }
+
+  async function linkSheet(rawUrl) {
+    var url = String(rawUrl || '').trim();
+    if (!url) { gsStatus('Paste a link first.', true); return; }
+    if (!/^https:\/\/docs\.google\.com\/spreadsheets\/d\//.test(url)) {
+      gsStatus('That is not a Google Sheets link — paste the web address of the sheet (docs.google.com/spreadsheets/…).', true);
+      return;
+    }
+    var btn = $('btn-gs-use');
+    btn.disabled = true; gsStatus('Reading the sheet…');
+    try {
+      var d = await fetchSheet(url);
+      var wb = csvToWorkbook(parseCsv(d.csv));
+      var buf = await wb.xlsx.writeBuffer();
+      var name = (d.title || 'Google Sheets ICRF').slice(0, 60);
+      var gs = { url: url, gid: d.gid || '0' };
+      rememberFile('icrf', name, buf, { gs: gs, gsAt: new Date().toISOString() });
+      state.icrfWb = wb; state.icrfName = name;
+      state._gsCsv = d.csv;
+      renderUploadStatus('icrf', { ok: true, msg: 'linked — ' + name });
+      gsStatus('');
+      renderGsRow();
+      if (state.tlWb) {
+        applySheetData(wb, false);
+        toast('<b>' + esc(name) + '</b> linked — vehicles now flow from the Google Sheet and auto-refresh every 15 min.');
+      } else {
+        maybeCombine();
+        gsStatus('Linked. Add the Troop Lift workbook to build the schedule — the sheet then keeps itself up to date.', false);
+      }
+    } catch (err) {
+      console.error(err);
+      gsStatus(String(err && err.message || err), true);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  async function refreshSheet(manual) {
+    var m = gsMeta();
+    if (!m || !state.model || !state.tlWb || sheetSyncing) return;   // needs a working schedule + TL workbook
+    if (document.querySelector('.sheet-input')) return;              // never move the floor under a typing user
+    sheetSyncing = true;
+    $('gs-err').hidden = true;
+    try {
+      var d = await fetchSheet(m.url);
+      var fresh = parseCsv(d.csv);
+      var prevCsv = state._gsCsv;
+      if (prevCsv === d.csv) {
+        state.files.icrf.gsAt = new Date().toISOString();
+        renderGsRow();
+        if (manual) toast('<b>Sheet refreshed.</b> No changes since last sync.');
+        return;
+      }
+      var nb = csvToWorkbook(fresh);
+      var buf = await nb.xlsx.writeBuffer();
+      rememberFile('icrf', state.icrfName || state.files.icrf.name, buf, { gs: m, gsAt: new Date().toISOString() });
+      state.icrfWb = nb;
+      applySheetData(nb, manual);
+      state._gsCsv = d.csv;
+      renderGsRow();
+    } catch (err) {
+      console.error(err);
+      if (manual) gsStatus('Sheet refresh failed: ' + String(err && err.message || err), true);
+    } finally {
+      sheetSyncing = false;
+    }
+  }
+
+  /* Common core of linking and the routine refresh: the sheet's ICRF rows
+     replace the stored ones outright (the sheet is the most accurate
+     source) — only TL rows and manual app-made rows are carried over. */
+  function applySheetData(wb, manual) {
+    var prev = state.entries.slice();
+    var model = null;
+    try {
+      model = T.parseWorkbooks(
+        { worksheets: [pickICRFSheet(wb)] },
+        { worksheets: [pickTLSheet(state.tlWb)] },
+        state.school);
+    } catch (err) {
+      console.error(err);
+    }
+    if (!model) return;
+    var merged = mergeEntries(model.entries, prev);
+    if (!TEST_MODE) merged = prunePastDates(merged).entries;
+    // new companies from the sheet appear as chips
+    merged.forEach(function (e) {
+      (e.coys || []).forEach(function (c) {
+        if (c !== 'SCHWIDE' && model.companies.indexOf(c) === -1) {
+          model.companies.push(c);
+          if (!(c in state.coys)) state.coys[c] = true;
+        }
+      });
+    });
+    var added = 0, removed = 0, updated = 0;
+    var prevIds = {}, e0 = {};
+    prev.forEach(function (e) { prevIds[e.id] = e; e0[e.id] = JSON.stringify(e); });
+    merged.forEach(function (e) {
+      if (!(e.id in prevIds)) added++;
+      else if (e0[e.id] !== JSON.stringify(e)) updated++;
+    });
+    Object.keys(prevIds).forEach(function (id) {
+      if (!merged.some(function (e) { return e.id === id; })) removed++;
+    });
+    state.model = model;
+    model.companies = T.sortCoys(model.companies, state.school);
+    state.entries = merged;
+    state.pristine.entries = JSON.parse(JSON.stringify(merged));
+    state.touched = true;
+    refreshDerived();
+    renderChips();
+    $('results').hidden = false;
+    $('empty-state').hidden = true;
+    $('btn-export').disabled = false;
+    $('btn-print').disabled = false;
+    setSrc(state.srcTab);
+    setTab(state.tab);
+    saveStore();
+    if (manual) {
+      toast('<b>Sheet refreshed.</b> ' +
+        (added ? added + ' added, ' : '') + (updated ? updated + ' updated, ' : '') + (removed ? removed + ' removed, ' : '') +
+        merged.length + ' rows on screen.');
+    }
+  }
+
+  function unlinkSheet() {
+    var f = state.files.icrf;
+    if (!f) return;
+    delete f.gs; delete f.gsAt;
+    state._gsCsv = null;
+    remote.filesDirty = true; remote.localFilesDirty = true;
+    renderGsRow();
+    saveStore();
+    flushSave(true);
+    toast('Google Sheets link removed. The workbook snapshot stays — upload new files whenever you like.');
+  }
+
   function maybeCombine() {
     var model = null;
 
@@ -1542,6 +1778,23 @@
       }
     });
 
+    // Google Sheets ICRF source
+    if (!TEST_MODE) {
+      $('btn-gs-use').addEventListener('click', function () { linkSheet($('gs-url').value); });
+      $('gs-url').addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); linkSheet($('gs-url').value); }
+      });
+      $('btn-gs-now').addEventListener('click', function () { refreshSheet(true); });
+      $('btn-gs-unlink').addEventListener('click', function () { unlinkSheet(); });
+      setInterval(function () {
+        if (document.visibilityState === 'visible' && remote.online) refreshSheet(false);
+      }, SHEET_INTERVAL);
+      document.addEventListener('visibilitychange', function () {
+        if (!document.hidden) { flushSave(true); if (remote.online) refreshSheet(false); }
+      });
+      window.addEventListener('online', function () { if (state.model) refreshSheet(false); });
+    }
+
     // tabs
     $('btn-tab-schedule').addEventListener('click', function () { setTab('schedule'); saveStore(true); });
     $('btn-tab-grid').addEventListener('click', function () { setTab('grid'); saveStore(true); });
@@ -1779,6 +2032,8 @@
       if (!fromLocal) lsSet(filesKey(key), JSON.stringify(state.files));
       renderUploadStatus('icrf', { ok: true, msg: 'restored — ' + state.icrfWb.worksheets[0].name });
       renderUploadStatus('tl', { ok: true, msg: 'restored — ' + state.tlWb.worksheets[0].name });
+      state._gsCsv = null;          // rebuild the sync baseline from the sheet on first self-check
+      renderGsRow();
       maybeCombine();
     } catch (err) {
       console.error(err);
@@ -1787,6 +2042,8 @@
     }
   }
   bootRestore();
+  /* first self-check shortly after boot so a shared sheet syncs without waiting a full cycle */
+  if (!TEST_MODE) setTimeout(function () { if (remote.online) refreshSheet(false); }, 5000);
 
   /* debug hook (used by tests / smoke runs; harmless otherwise) */
   window.__tcrs = {
@@ -1801,6 +2058,7 @@
     applyTLText: applyTLText, tlText: tlText,
     addIcrfRow: addIcrfRow, dupIcrf: dupIcrf, delIcrf: delIcrf,
     prunePastDates: prunePastDates,
+    parseCsv: parseCsv, csvToWorkbook: csvToWorkbook, mergeEntries: mergeEntries,
     resetEdits: resetEdits,
     saveStore: saveStore, flushSave: flushSave, flushSchedule: flushSchedule,
     setTab: setTab, setSrc: setSrc,

@@ -29,7 +29,8 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import unquote, urlsplit
+from urllib.parse import parse_qs, unquote, urlsplit
+from urllib.request import Request as UrlRequest, urlopen
 
 HERE = Path(__file__).resolve().parent
 SITE_DIR = Path(os.environ.get("TCRS_SITE_DIR", HERE)).resolve()
@@ -330,6 +331,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.redirect("/login")
         if path == "/api/state":
             return self.send_bytes(200, STORE.snapshot().encode(), "application/json")
+        if path == "/api/sheet":
+            return fetch_sheet(self)
         if path in PROTECTED:
             return self.serve_file(PROTECTED[path])
         self.send_json(404, {"error": "not found"})
@@ -401,6 +404,56 @@ class Handler(BaseHTTPRequestHandler):
         AUTH.record_fail(ip)
         time.sleep(0.6)
         self.send_json(401, {"error": "Wrong password."})
+
+
+# ---------------------------------------------------- google sheets fetch --
+GSID_RE = re.compile(r"/d/([A-Za-z0-9_-]{20,})")
+GID_RE = re.compile(r"[?&#]gid=(\d+)")
+
+
+def fetch_sheet(self):
+    """Pulls a shared Google Sheet as CSV for the client (browser CORS blocks
+    this directly). Only docs.google.com/spreadsheets links are ever fetched,
+    and the link must be shared with 'anyone with the link can view'."""
+    url = (parse_qs(urlsplit(self.path).query).get("url", [""])[0] or "").strip()
+    ms = GSID_RE.search(url)
+    if not (url.startswith("https://") and ms and
+            "docs.google.com" in url[:len("https://docs.google.com/") + 40]):
+        return self.send_json(400, {"error": "Paste a Google Sheets link (docs.google.com/spreadsheets/...)."})
+    gidm = GID_RE.search(url)
+    gid = gidm.group(1) if gidm else "0"
+    title, csv, last_err = "", "", None
+    for cu in (
+        "https://docs.google.com/spreadsheets/d/%s/export?format=csv&gid=%s" % (ms.group(1), gid),
+        "https://docs.google.com/spreadsheets/d/%s/gviz/tq?tqx=out:csv&gid=%s" % (ms.group(1), gid),
+    ):
+        try:
+            with urlopen(UrlRequest(cu, headers={"User-Agent": "Mozilla/5.0 (TCRS)"}), timeout=25) as resp:
+                data = resp.read(20 * 1024 * 1024)
+            if resp.status != 200 or not data:
+                last_err = "HTTP %d" % resp.status
+                continue
+            # export endpoint answers with the xlsx error page when sharing is off
+            if b"<title>Sign in" in data or b"accounts.google.com" in data[:2000]:
+                last_err = "sharing off — set the sheet to 'anyone with the link can view'"
+                continue
+            csv, last_err = data.decode("utf-8", "replace"), None
+            break
+        except Exception as exc:
+            last_err = str(exc)
+    if not csv:
+        return self.send_json(502, {"error": "Google would not serve that sheet (%s). "
+                                            "Check it is shared as 'anyone with the link'." % (last_err or "unknown")})
+    try:
+        with urlopen(UrlRequest("https://docs.google.com/spreadsheets/d/%s/edit" % ms.group(1),
+                                headers={"User-Agent": "Mozilla/5.0 (TCRS)"}), timeout=15) as resp:
+            mt = re.search(rb"<title>([^<]+)</title>", resp.read(400000))
+            if mt:
+                title = (mt.group(1).decode("utf-8", "replace")
+                         .replace(" - Google Sheets", "").strip())
+    except Exception:
+        pass
+    return self.send_json(200, {"csv": csv, "gid": gid, "title": title})
 
 
 SWEEP_INTERVAL = 6 * 3600    # deletions run at startup, then every 6 hours

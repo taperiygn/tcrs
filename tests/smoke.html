@@ -296,6 +296,52 @@
     ok('pruning held off in test mode (no sweep toast)',
       txt(document.getElementById('toast')).indexOf('auto-removed by sweep') < 0);
 
+    /* ---------- google sheets ICRF source ---------- */
+    var csv = 'h1,h2\n"a,b",plain\n"multi\nline",三个\n"escaped ""quote""",x\n';
+    var rows = A.parseCsv(csv);
+    ok('csv parser handles quotes, commas, newlines',
+      rows.length === 4 && rows[1][0] === 'a,b' && rows[1][1] === 'plain' &&
+      rows[2][0] === 'multi' + '\n' + 'line' && rows[2][1] === '三个' &&
+      rows[3][0] === 'escaped "quote"', JSON.stringify(rows));
+    /* a synthetic shared-sheet CSV flows through the real ICRF parser */
+    var gsCsv = [
+      ',Resource,,,Execution Time,,,,Location,,POC Details,,,',
+      ',Type of Veh,Qty,Required TO,Start,,End,,Reporting,Destination,Conducting Officer,Contact No.,Unit,Remarks',
+      'SCH 4 - 4TH COY - GS TEST MOVE,LUV,2,2,2/11/27,11:00,2/11/27,13:00,4TH,HG RANGE,3WO TEST,84980951,SCH 4,'
+    ].join('\n');
+    var gsWb = A.csvToWorkbook(A.parseCsv(gsCsv));
+    // minimal TL workbook: one "MONTH TL" title row so makeMonthRef knows the month
+    var gsTL = new ExcelJS.Workbook();
+    var gsTlWs = gsTL.addWorksheet('NOVEMBER TL');
+    gsTlWs.getRow(1).values = ['NOVEMBER TL'];
+    var gsModel = window.TCRS.parseWorkbooks({ worksheets: [gsWb.worksheets[0]] }, { worksheets: [gsTlWs] }, 4);
+    var gsRows = gsModel.entries.filter(function (e) { return e.activity === 'GS TEST MOVE'; });
+    ok('google sheet CSV parses through the real ICRF pipeline',
+      gsRows.length === 1 && gsRows[0].coys.join(',') === '4TH' && gsRows[0].timeStart === '1100' &&
+      gsRows[0].date === '2027-11-02' && gsRows[0].from === '4TH' && gsRows[0].to === 'HG RANGE',
+      gsRows.length ? JSON.stringify({ coy: gsRows[0].coyLabel, t: gsRows[0].timeStart, d: gsRows[0].date, from: gsRows[0].from, to: gsRows[0].to }) : 'no row');
+
+    /* sheet wins: edited ICRF variants of its rows fall back to sheet data; TL rows, manual rows and sheet deletions behave */
+    function mk(e) { var c = JSON.parse(JSON.stringify(e)); return c; }
+    var prev = [
+      { id: 'i5', source: 'ICRF', activity: 'OLD EDIT', edited: true },
+      { id: 'i9', source: 'MANUAL', via: 'icrf', activity: 'USER-MADE' },
+      { id: 't2', source: 'TL', activity: 'BUS LINE' },
+      { id: 'i3', source: 'ICRF', activity: 'SHEET-DELETED' }
+    ];
+    var fresh = [
+      { id: 'i5', source: 'ICRF', activity: 'SHEET VERSION' },
+      { id: 'i6', source: 'ICRF', activity: 'NEW SHEET ROW' }
+    ];
+    var mg = A.mergeEntries(fresh, prev);
+    var mgi = function (id) { return mg.filter(function (e) { return e.id === id; })[0]; };
+    ok('sheet overrides edited rows; TL + manual kept; sheet-deleted rows drop',
+      mg.length === 4 && mgi('i5') && mgi('i5').activity === 'SHEET VERSION' &&
+        mgi('i6') && mgi('i6').activity === 'NEW SHEET ROW' &&
+        mgi('t2') && mgi('t2').activity === 'BUS LINE' &&
+        mgi('i9') && mgi('i9').activity === 'USER-MADE' && !mgi('i3'),
+      JSON.stringify(mg.map(function (e) { return e.id + ':' + e.activity; })));
+
     /* ---------- sidebar collapse ---------- */
     var railBtn = document.getElementById('rail-toggle');
     railBtn.click();
