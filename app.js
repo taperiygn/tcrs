@@ -90,10 +90,10 @@
      Each school is a separate profile: every storage key is prefixed with the
      school, so School 4 months and School 2 months never share data. */
   function schoolPart() { return 's' + state.school; }
-  function monthStr() { return state.model.month + '-' + state.model.year; }
+  function monthStr(k) { return k || (state.model ? state.model.month + '-' + state.model.year : 'current'); }
   function monthKey() { return schoolPart() + '-' + state.model.month + '-' + state.model.year; }
-  function storeKey() { return 'tcrs:v3:' + schoolPart() + ':' + monthStr(); }
-  function filesKey() { return 'tcrs:files:' + schoolPart() + ':' + monthStr(); }
+  function storeKey(k) { return 'tcrs:v3:' + schoolPart() + ':' + monthStr(k); }
+  function filesKey(k) { return 'tcrs:files:' + schoolPart() + ':' + monthStr(k); }
   function lastKey() { return 'tcrs:last:' + schoolPart() + ':'; }
 
   /* one-time rename: the original keys ('tcrs:v3:11-2026', month NUMBER not name)
@@ -274,9 +274,9 @@
   }
 
   /* -- loading -- */
-  function readLocal(key) {
+  function readLocal(key) {          // key = month key, e.g. '11-2026'
     try {
-      var d = JSON.parse(lsGet(storeKey()) || 'null');
+      var d = JSON.parse(lsGet('tcrs:v3:' + schoolPart() + ':' + key) || 'null');
       if (d && d.v === 3 && Array.isArray(d.entries)) { d.hasEdits = d.entries.length > 0; return d; }
     } catch (e) { }
     return null;
@@ -397,7 +397,7 @@
   /* Removing a workbook unloads it for good (it won't reappear on reload); the edits
      stay stored, and come back if the same month is combined again. */
   function forgetFiles(key) {
-    lsDel(filesKey());
+    lsDel(filesKey(key));
     lsDel(lastKey());
     if (remote.online && !remote.conflict) {
       fetch('/api/state/' + encodeURIComponent(key), {
@@ -1703,7 +1703,7 @@
 
     var files = rRec && key === rl && rRec.files, fromLocal = false;
     if (!files || !files.icrf || !files.tl) {
-      try { files = JSON.parse(lsGet(filesKey()) || 'null'); fromLocal = true; } catch (e) { files = null; }
+      try { files = JSON.parse(lsGet(filesKey(key)) || 'null'); fromLocal = true; } catch (e) { files = null; }
     }
     if (!files || !files.icrf || !files.tl) return;
     try {
@@ -1712,13 +1712,14 @@
       state.files = { icrf: files.icrf, tl: files.tl };
       remote.filesDirty = fromLocal && remote.online;
       remote.localFilesDirty = false;
-      if (!fromLocal) lsSet(filesKey(), JSON.stringify(state.files));
+      if (!fromLocal) lsSet(filesKey(key), JSON.stringify(state.files));
       renderUploadStatus('icrf', { ok: true, msg: 'restored — ' + state.icrfWb.worksheets[0].name });
       renderUploadStatus('tl', { ok: true, msg: 'restored — ' + state.tlWb.worksheets[0].name });
       maybeCombine();
     } catch (err) {
       console.error(err);
-      toast('Could not reopen your saved workbooks — load the files again.', true);
+      toast('Could not reopen your saved workbooks <span class="sub">(' +
+        esc(String(err && err.message || err).slice(0, 90)) + ')</span> — load the files again.', true);
     }
   }
   bootRestore();
