@@ -1,0 +1,17 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'gcr.io/$PROJECT_ID/tcrs-backend', '.']
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/tcrs-backend']
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - tcrs-backend
+      - --image=gcr.io/$PROJECT_ID/tcrs-backend
+      - --region=us-central1
+      - --platform=managed
+      - --allow-unauthenticated
+      - --set-env-vars=HOST=0.0.0.0,PORT=8080,TCRS_ALLOWED_ORIGINS=https://YOUR_GITHUB_USERNAME.github.io
+      - --set-secrets=TCRS_PASSWORD=.M:latest

@@ -54,6 +54,22 @@ site itself, sits behind the password. Options (environment variables):
 | `TCRS_SESSION_DAYS` | `30` | How long a sign-in lasts |
 | `TCRS_SECRET` | generated | Cookie-signing secret (otherwise created in the data dir) |
 
+### Deployment architecture
+
+The app is now split into a static frontend and a backend API:
+
+- Frontend source: `frontend/` — deploy as a static site on GitHub Pages
+- Backend source: `backend/` — deploy on Google Cloud Run
+- Shared secret: `.M` (or equivalent Secret Manager secret) stores the backend password outside source control
+- Allowed frontend origin: `TCRS_ALLOWED_ORIGINS` or `TCRS_ALLOWED_ORIGIN` restricts backend calls to the GitHub Pages domain only
+
+### GitHub Pages + Cloud Run
+
+1. Publish the contents of `frontend/` from the repository's Pages workflow.
+2. Set the frontend `window.TCRS_API_BASE` to your Cloud Run URL or add the value in the deployment config.
+3. Deploy the backend from `backend/` to Cloud Run using the provided `backend/Dockerfile` and `backend/cloudbuild.yaml`.
+4. Define the allowed front-end domain via `TCRS_ALLOWED_ORIGINS` (for example `https://your-user.github.io`) and keep the real password in `.M` / Secret Manager.
+
 ### Putting it on the internet
 
 The server speaks plain HTTP, so publish it **behind HTTPS** — the easy way is a host

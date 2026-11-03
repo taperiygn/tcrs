@@ -1,3 +1,9 @@
 data/
 __pycache__/
 .DS_Store
+.M
+.M.*
+.env
+.env.*
+frontend/config.local.js
+backend/.M
