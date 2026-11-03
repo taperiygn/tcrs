@@ -124,6 +124,19 @@
     conflict: false         // another device saved first — stop overwriting it
   };
   var saveTimer = null, savePending = false;
+  var TEST_MODE = typeof window !== 'undefined' && !!window.__TCRS_TEST_MODE;   // smoke harness: pruning off
+
+  /* backend automation carries into the app: rows whose last day is in the
+     past are dropped at parse/restore time (server archives its deletes) */
+  function prunePastDates(entries) {
+    var d = new Date();
+    var today = d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+    var kept = entries.filter(function (e) {
+      var end = e.eDate || e.date || '';
+      return !(typeof end === 'string' && end.length === 10 && end[4] === '-' && end < today);
+    });
+    return { entries: kept, gone: entries.length - kept.length };
+  }
 
   function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
   function lsSet(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } }
@@ -499,9 +512,17 @@
     });
     model.companies = T.sortCoys(model.companies, state.school);
 
+    /* keep the workspace clear of movements that already happened; pristine
+       gets the pruned too so "Reset edits" matches what is on screen */
+    var prunedRows = 0;
+    if (!TEST_MODE) {
+      var pr = prunePastDates(state.entries);
+      if (pr.gone) { state.entries = pr.entries; prunedRows = pr.gone; }
+    }
+
     // pristine snapshot ("Reset edits") — plain copy, order preserved as parsed
     state.pristine = JSON.parse(JSON.stringify({
-      entries: model.entries, tlLines: model.tlLines, skipped: model.icrfSkipped
+      entries: state.entries, tlLines: model.tlLines, skipped: model.icrfSkipped
     }));
 
     // line ids (used by the live sheet and manual lines)
@@ -524,6 +545,7 @@
 
     var s = statsFor(filteredEntries());
     toast('<b>Combined.</b> ' + s.movements + ' movements over ' + s.days + ' days.' +
+      (prunedRows ? ' <span class="sub">' + prunedRows + ' past-dated row' + (prunedRows === 1 ? '' : 's') + ' auto-removed by sweep.</span>' : '') +
       (hadEdits ? ' Your previous edits were restored.' : ''));
   }
 
@@ -1778,6 +1800,7 @@
     commitICRF: commitICRF,
     applyTLText: applyTLText, tlText: tlText,
     addIcrfRow: addIcrfRow, dupIcrf: dupIcrf, delIcrf: delIcrf,
+    prunePastDates: prunePastDates,
     resetEdits: resetEdits,
     saveStore: saveStore, flushSave: flushSave, flushSchedule: flushSchedule,
     setTab: setTab, setSrc: setSrc,

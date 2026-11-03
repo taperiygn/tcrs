@@ -18,6 +18,13 @@
   }
   function log() { document.getElementById('smoke-out').textContent = out.join('\n'); }
   function txt(el) { return el ? el.textContent : ''; }
+  /* YYYY-MM-DD helpers for the past-date sweep tests */
+  function __d(offsetDays) {
+    var d = new Date(); d.setDate(d.getDate() + offsetDays);
+    return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+  }
+  function __today() { return __d(0); }
+  function __yesterday() { return __d(-1); }
 
   try {
     var html = await fetch('../index.html').then(function (r) { return r.text(); });
@@ -26,6 +33,7 @@
     document.body.appendChild(doc.querySelector('main'));
     document.body.appendChild(doc.querySelector('.toast'));
 
+    window.__TCRS_TEST_MODE = true;   // past-date auto-sweep off for deterministic counts
     eval(await fetch('../app.js').then(function (r) { return r.text(); }));
     eval(await fetch('../sheet.js').then(function (r) { return r.text(); }));
     A = window.__tcrs;
@@ -269,6 +277,24 @@
       !A.state.model && A.state.entries.length === 0 && A.state.school === 1);
     await A.setSchool(4);
     ok('back on School 4', A.state.school === 4 && txt(document.querySelector('.smark')) === 'S4');
+
+    /* ---------- past-date sweep logic (Prune past) ---------- */
+    var sweep = A.prunePastDates([
+      { id: 'p1', eDate: __yesterday(), activity: 'PAST' },
+      { id: 'p2', eDate: __today(),   activity: 'TODAY' },
+      { id: 'p3', eDate: '2030-01-09', activity: 'FUTURE' },
+      { id: 'p4', date: __yesterday(), activity: 'PAST-DATE-FALLBACK' },
+      { id: 'p5', activity: 'UNDATED' }
+    ]);
+    ok('pruner drops past-dated rows (eDate and date fallback), keeps today/future/undated',
+      sweep.gone === 2 && sweep.entries.length === 3 &&
+      !sweep.entries.some(function (e) { return e.activity === 'PAST' || e.activity === 'PAST-DATE-FALLBACK'; }) &&
+      sweep.entries.some(function (e) { return e.activity === 'TODAY'; }) &&
+      sweep.entries.some(function (e) { return e.activity === 'FUTURE'; }) &&
+      sweep.entries.some(function (e) { return e.activity === 'UNDATED'; }),
+      'gone=' + sweep.gone + ' kept=' + sweep.entries.length);
+    ok('pruning held off in test mode (no sweep toast)',
+      txt(document.getElementById('toast')).indexOf('auto-removed by sweep') < 0);
 
     /* ---------- sidebar collapse ---------- */
     var railBtn = document.getElementById('rail-toggle');

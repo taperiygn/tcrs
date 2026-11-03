@@ -403,6 +403,56 @@ class Handler(BaseHTTPRequestHandler):
         self.send_json(401, {"error": "Wrong password."})
 
 
+SWEEP_INTERVAL = 6 * 3600    # deletions run at startup, then every 6 hours
+
+
+# ------------------------------------------------- past-dated automation --
+def sweep_past_dates(store):
+    """Backend automation: movements whose last day is in the past are
+    deleted from every stored month. Nothing is lost — the removed rows go
+    to data/archive-<timestamp>.json and the source workbooks are untouched."""
+    today = time.strftime("%Y-%m-%d")
+    removed = {}
+    with store.lock:
+        for key, rec in store.doc.get("months", {}).items():
+            ed = rec.get("edits")
+            if not isinstance(ed, dict) or not isinstance(ed.get("entries"), list):
+                continue
+            keep, gone = [], []
+            for e in ed["entries"]:
+                end = e.get("eDate") or e.get("date") or ""
+                if isinstance(end, str) and len(end) == 10 and end[4] == "-" and end < today:
+                    gone.append(e)
+                else:
+                    keep.append(e)
+            if gone:
+                removed[key] = gone
+                ed["entries"] = keep   # undated / current / future rows survive
+    if not removed:
+        return 0
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    archive = store.dir / ("archive-%s.json" % stamp)
+    archive.write_text(json.dumps(
+        {"sweeper": "past-dated", "ranAt": today, "months": removed}, indent=1,
+    ), encoding="utf-8")
+    store._write()
+    n = sum(len(v) for v in removed.values())
+    print("sweeper: removed %d past-dated row%s across %d month%s — archived to %s"
+          % (n, "" if n == 1 else "s", len(removed), "" if len(removed) == 1 else "s", archive.name),
+          flush=True)
+    return n
+
+
+def sweep_loop(store, interval):
+    """Runs the sweep at startup and again every `interval` seconds."""
+    while True:
+        try:
+            sweep_past_dates(store)
+        except Exception as exc:            # never take the server down over the sweep
+            print("sweeper error: %r" % exc, file=sys.stderr, flush=True)
+        time.sleep(interval)
+
+
 def main():
     global STORE, AUTH
     if len(PASSWORD) < 6:
@@ -410,6 +460,7 @@ def main():
                  "  TCRS_PASSWORD='a long passphrase' python3 server.py")
     STORE = Store(DATA_DIR)
     AUTH = Auth()
+    threading.Thread(target=sweep_loop, args=(STORE, SWEEP_INTERVAL), daemon=True).start()
     host = os.environ.get("HOST", "127.0.0.1")
     port = int(os.environ.get("PORT", "8000"))
     srv = ThreadingHTTPServer((host, port), Handler)
