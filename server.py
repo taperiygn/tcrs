@@ -82,6 +82,40 @@ class Store:
                 broken = self.path.with_name("state.json.corrupt-%d" % int(time.time()))
                 shutil.copy(self.path, broken)
                 print("WARNING: state.json was unreadable — kept a copy at %s" % broken, file=sys.stderr)
+        self._migrate_legacy_keys()
+
+    def _migrate_legacy_keys(self):
+        """Before per-school profiles, months were stored as '<MONTH>-<YEAR>'
+        (e.g. '11-2026') and all of it belonged to School 4. Rename those keys
+        to the school-prefixed form so the data survives; when the same month
+        was re-saved under both names, keep the newest and fill any missing
+        edits/files from the other copy. Idempotent."""
+        legacy = re.compile(r"^(?:(\d{1,2})|([A-Z]{3,9}))-(\d{4})$")
+        changed = False
+        for key in [k for k in self.doc.get("months", {}) if legacy.match(k)]:
+            months = self.doc["months"]
+            new = "s4-" + key
+            old = months.pop(key)
+            if new not in months:
+                months[new] = old
+            else:
+                cur = months[new]
+                late, early = (cur, old) if str(cur.get("savedAt", "")) >= str(old.get("savedAt", "")) else (old, cur)
+                merged = dict(late)
+                if not (late.get("edits") or {}).get("entries") and (early.get("edits") or {}).get("entries"):
+                    merged["edits"] = early["edits"]
+                if not late.get("files") and early.get("files"):
+                    merged["files"] = early["files"]
+                merged["rev"] = max(int(late.get("rev", 0)), int(early.get("rev", 0))) + 1
+                months[new] = merged
+            changed = True
+        last = self.doc.get("last")
+        if last and legacy.match(last):
+            self.doc["last"] = "s4-" + last
+            changed = True
+        if changed:
+            print("migrated legacy month keys to School 4 profile keys")
+            self._write()
 
     def snapshot(self):
         with self.lock:

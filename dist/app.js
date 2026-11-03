@@ -96,19 +96,21 @@
   function filesKey() { return 'tcrs:files:' + schoolPart() + ':' + monthStr(); }
   function lastKey() { return 'tcrs:last:' + schoolPart() + ':'; }
 
-  /* one-time rename: the original keys ('tcrs:v3:<MONTH>-<YEAR>') belonged to School 4 */
+  /* one-time rename: the original keys ('tcrs:v3:11-2026', month NUMBER not name)
+     belonged to School 4; rewrite them to the school-prefixed form */
   function migrateLegacyKeys() {
     var keys = [];
     try { for (var i = 0; i < localStorage.length; i++) keys.push(localStorage.key(i)); } catch (e) { return; }
-    var MYR = '(JANUARY|FEBRUARY|MARCH|APRIL|MAY|JUNE|JULY|AUGUST|SEPTEMBER|OCTOBER|NOVEMBER|DECEMBER)-\\d{4}';
-    var re = new RegExp('^(tcrs:v3:|tcrs:files:)' + MYR + '$');
+    var re = /^(tcrs:v3:|tcrs:files:)((?:\d{1,2}|JANUARY|FEBRUARY|MARCH|APRIL|MAY|JUNE|JULY|AUGUST|SEPTEMBER|OCTOBER|NOVEMBER|DECEMBER)-\d{4})$/;
     keys.forEach(function (k) {
       var m = re.exec(k);
       if (m) { lsSet(m[1] + 's4:' + m[2], lsGet(k)); lsDel(k); }
     });
-    if (lsGet('tcrs:last:s4:') === null && lsGet('tcrs:last') !== null && lsGet('tcrs:last') !== undefined) {
-      lsSet('tcrs:last:s4:', lsGet('tcrs:last'));
-      lsDel('tcrs:last');
+    var last = lsGet('tcrs:last');
+    var lastS4 = lsGet('tcrs:last:s4:');
+    if (last !== null) { lsSet('tcrs:last:s4:', 's4-' + last); lsDel('tcrs:last'); }
+    else if (lastS4 !== null && lastS4 !== '' && lastS4.indexOf('s4-') !== 0) {
+      lsSet('tcrs:last:s4:', 's4-' + lastS4);      // repair a wrongly-shaped earlier copy
     }
   }
   migrateLegacyKeys();
