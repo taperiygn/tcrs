@@ -176,6 +176,23 @@ body {
 }
 body.tab-grid .layout { grid-template-columns: minmax(0, 1fr); }
 body.tab-grid .rail { display: none; }
+
+/* one-tap collapse of the side panel to give the schedule full width */
+#rail-toggle {
+  align-self: flex-start;
+  width: 26px; height: 66px; padding: 0;
+  border: 1px solid var(--line, #e6e2f2); border-radius: 9px;
+  background: #fff; color: var(--ink-faint);
+  font-size: 15px; line-height: 1; cursor: pointer;
+  box-shadow: 0 1px 4px rgba(60, 50, 120, .08);
+  transition: color .15s ease, box-shadow .15s ease, transform .15s ease;
+  justify-self: start;
+}
+#rail-toggle:hover { color: var(--accent, #6a5ae0); box-shadow: 0 3px 10px rgba(60, 50, 120, .12); }
+body.rail-collapsed .layout { grid-template-columns: 34px minmax(0, 1fr); gap: 14px; }
+body.rail-collapsed .rail { min-height: 0; overflow: visible; }
+body.rail-collapsed .rail > :not(#rail-toggle) { display: none !important; }
+body.rail-collapsed .workspace { min-width: 0; }
 .rail { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 
 .rail .step-label {
@@ -664,6 +681,9 @@ table.mov .datecell .dow { color: var(--lav-ink); font-weight: 700; margin-left:
 /* -------------------------------------------------------- responsive */
 @media (max-width: 1140px) {
   .layout, body.tab-grid .layout { grid-template-columns: 1fr; }
+  #rail-toggle { display: none; }
+  body.rail-collapsed .rail > :not(#rail-toggle) { display: revert; }
+  body.rail-collapsed .rail { min-height: auto; }
   .statsbar { grid-template-columns: repeat(3, 1fr); }
   .topbar-inner { flex-wrap: wrap; height: auto; padding: 12px 18px; row-gap: 10px; }
   .topbtns { flex-wrap: wrap; }

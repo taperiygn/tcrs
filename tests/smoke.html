@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>UI smoke</title>
 <style>.toast,.bgwash{display:none}body{background:#fff;margin:0}</style>
+<link rel="stylesheet" href="../styles.css">
 <script src="../vendor/exceljs.min.js"></script>
 <script src="../parser.js"></script>
 </head><body>
@@ -244,6 +245,20 @@
       !A.state.model && A.state.entries.length === 0 && A.state.school === 1);
     await A.setSchool(4);
     ok('back on School 4', A.state.school === 4 && txt(document.querySelector('.smark')) === 'S4');
+
+    /* ---------- sidebar collapse ---------- */
+    var railBtn = document.getElementById('rail-toggle');
+    railBtn.click();
+    ok('sidebar collapses on toggle',
+      document.body.classList.contains('rail-collapsed') &&
+      getComputedStyle(document.body.querySelector('.rail > :not(#rail-toggle)')).display === 'none',
+      'cls=' + document.body.className + ' disp=' +
+      getComputedStyle(document.body.querySelector('.rail > :not(#rail-toggle)')).display);
+    railBtn.click();
+    ok('sidebar expands again', !document.body.classList.contains('rail-collapsed') &&
+      getComputedStyle(document.body.querySelector('.rail > :not(#rail-toggle)')).display !== 'none',
+      'cls=' + document.body.className + ' disp=' +
+      getComputedStyle(document.body.querySelector('.rail > :not(#rail-toggle)')).display);
     localStorage.clear();
 
     /* ---------- blank panel when nothing is parsed ---------- */

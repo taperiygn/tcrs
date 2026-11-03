@@ -1513,6 +1513,14 @@
       saveStore(true);
     });
 
+    $('rail-toggle').addEventListener('click', function () {
+      var collapsed = document.body.classList.toggle('rail-collapsed');
+      this.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+      this.textContent = collapsed ? '›' : '‹';
+      this.title = collapsed ? 'Show the side panel' : 'Hide the side panel';
+      lsSet('tcrs:rail', collapsed ? 'collapsed' : 'open');
+    });
+
     $('grid-search').addEventListener('input', function (e) { applySearch(); });
     var discardArm = null;
     $('grid-discard').addEventListener('click', function () {
