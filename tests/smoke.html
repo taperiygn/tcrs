@@ -72,16 +72,17 @@
     var hoverId = hoverTr.dataset.id;
     hoverTr.querySelector('td[data-key]').dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
     await new Promise(function (r) { setTimeout(r, 450); });
-    var strip = document.querySelector('#icrf-container tr.row-insert');
-    ok('hovering 0.25s arms the insert strip', !!strip &&
-      strip.dataset.after === hoverId,
-      strip ? '' : 'no strip after 0.45s');
-    strip.click();
+    var menu = document.querySelector('#icrf-container .hover-menu');
+    ok('hovering 0.25s opens the row menu under the cursor', !!menu &&
+      menu.querySelector('button[data-act="insert"]') && menu.querySelector('button[data-act="dup"]') &&
+      menu.querySelector('button[data-act="del"]'),
+      menu ? 'acts=' + [].map.call(menu.querySelectorAll('button'), function (bt) { return bt.dataset.act; }).join() : 'no menu after 0.45s');
+    menu.querySelector('button[data-act="insert"]').click();
     var added = A.state.entries.filter(function (e) { return idsBefore.indexOf(e.id) === -1; });
     var trs = [].slice.call(document.querySelectorAll('#icrf-container tbody tr:not(.sheet-empty)'));
     var iHover = trs.indexOf(trs.filter(function (t) { return t.dataset.id === hoverId; })[0]);
     var iNew = trs.indexOf(trs.filter(function (t) { return added[0] && t.dataset.id === added[0].id; })[0]);
-    ok('strip click inserts a blank row directly below the hovered one',
+    ok('menu: add-row-below inserts a blank row directly below the hovered one',
       A.state.entries.length === nBefore + 1 && added.length === 1 &&
       added[0].source === 'MANUAL' && added[0].activity === '' && iNew === iHover + 1,
       'n=' + A.state.entries.length + ' iHover=' + iHover + ' iNew=' + iNew);

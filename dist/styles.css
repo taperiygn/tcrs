@@ -595,19 +595,26 @@ table.mov .datecell .dow { color: var(--lav-ink); font-weight: 700; margin-left:
 .sheet-input::selection { background: var(--lav-deep); }
 
 .gutter { text-align: right !important; padding-right: 10px !important; cursor: default; }
-tr.row-insert { cursor: pointer; }
-tr.row-insert td {
-  text-align: center;
-  font-size: 11px; font-weight: 650; letter-spacing: .04em;
-  color: var(--accent, #6a5ae0);
-  background: #faf9ff;
-  border-top: 1.5px dashed var(--lav-deep, #a99df0);
-  border-bottom: 1.5px dashed var(--lav-deep, #a99df0);
-  padding: 3px 8px;
-  animation: insert-in .18s ease;
+
+.sheet { position: relative; }
+
+.hover-menu {
+  position: absolute; z-index: 55; min-width: 148px;
+  background: #fff; border: 1px solid var(--line-strong, #d8d3ec);
+  border-radius: 10px; padding: 4px;
+  box-shadow: 0 8px 24px rgba(40, 30, 100, .18);
+  animation: menu-in .15s ease;
 }
-tr.row-insert:hover td { background: var(--lav, #ece7fc); }
-@keyframes insert-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; } }
+.hover-menu button {
+  display: block; width: 100%; text-align: left;
+  padding: 6px 10px; border: 0; background: none; border-radius: 7px;
+  font: inherit; font-size: 12px; font-weight: 650; color: var(--ink);
+  cursor: pointer; white-space: nowrap;
+}
+.hover-menu button:hover { background: var(--lav, #ece7fc); }
+.hover-menu button.m-del:hover { background: #fbe1e7; color: var(--rose-ink, #a03a53); }
+.hover-menu button.armed { background: var(--rose, #fbdce4); color: var(--rose-ink, #a03a53); }
+@keyframes menu-in { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; } }
 
 .g-btn {
   appearance: none; border: none; cursor: pointer;
