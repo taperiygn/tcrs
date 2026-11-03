@@ -254,6 +254,10 @@
       getComputedStyle(document.body.querySelector('.rail > :not(#rail-toggle)')).display === 'none',
       'cls=' + document.body.className + ' disp=' +
       getComputedStyle(document.body.querySelector('.rail > :not(#rail-toggle)')).display);
+    A.setTab('grid');
+    var gtc = getComputedStyle(document.querySelector('.layout')).gridTemplateColumns;
+    ok('live sheet keeps full width while collapsed', gtc.split(' ').length === 1, gtc);
+    A.setTab('schedule');
     railBtn.click();
     ok('sidebar expands again', !document.body.classList.contains('rail-collapsed') &&
       getComputedStyle(document.body.querySelector('.rail > :not(#rail-toggle)')).display !== 'none',

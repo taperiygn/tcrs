@@ -190,6 +190,8 @@ body.tab-grid .rail { display: none; }
 }
 #rail-toggle:hover { color: var(--accent, #6a5ae0); box-shadow: 0 3px 10px rgba(60, 50, 120, .12); }
 body.rail-collapsed .layout { grid-template-columns: 34px minmax(0, 1fr); gap: 14px; }
+/* the live-sheet tab hides the rail but must not keep its collapsed gutter */
+body.tab-grid.rail-collapsed .layout { grid-template-columns: minmax(0, 1fr); }
 body.rail-collapsed .rail { min-height: 0; overflow: visible; }
 body.rail-collapsed .rail > :not(#rail-toggle) { display: none !important; }
 body.rail-collapsed .workspace { min-width: 0; }
