@@ -1,0 +1,37 @@
+name: Deploy backend to Cloud Run
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'backend/**'
+      - .github/workflows/deploy-backend.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: cloud-run
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud (Workload Identity Federation)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/252721065839/locations/global/workloadIdentityPools/github-pool/providers/github
+          service_account: tcrs-deployer@project-05729eb3-f5bf-4e44-aac.iam.gserviceaccount.com
+
+      - name: Set up gcloud CLI
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Build and deploy via Cloud Build
+        run: gcloud builds submit --config backend/cloudbuild.yaml .

@@ -63,6 +63,10 @@ The app is now split into a static frontend and a backend API:
 - Shared secret: `.M` (or equivalent Secret Manager secret) stores the backend password outside source control
 - Allowed frontend origin: `TCRS_ALLOWED_ORIGINS` or `TCRS_ALLOWED_ORIGIN` restricts backend calls to the GitHub Pages domain only
 
+### Public repo safety
+
+Keep the Pages repo public-safe by only committing the static frontend and public configuration. Store real passwords, cookie-signing secrets, and any local data under `.M`, `.env`, or your hosting provider's secret manager instead of GitHub. The included `.env.example` file shows the required variables without exposing real credentials.
+
 ### GitHub Pages + Cloud Run
 
 1. Publish the contents of `frontend/` from the repository's Pages workflow.

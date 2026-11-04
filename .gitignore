@@ -1,9 +1,24 @@
+# Local runtime state and secrets
+# Never commit passwords, cookies, keys, or app data to a public repo.
 data/
+backend/data/
 __pycache__/
+*.log
+*.bak
+*.key
+*.pem
+*.crt
+*.p12
+*.sqlite
+*.db
+*.secret
+*.token
 .DS_Store
 .M
 .M.*
 .env
 .env.*
+!.env.example
 frontend/config.local.js
 backend/.M
+backend/.M.*
