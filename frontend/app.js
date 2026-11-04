@@ -263,7 +263,7 @@
         if (sendingFiles) body.files = state.files;
         var json = JSON.stringify(body);
         var r = await fetch(API_BASE + '/api/state/' + encodeURIComponent(key), {
-          method: 'PUT', credentials: 'same-origin',
+          method: 'PUT', credentials: 'include',
           headers: { 'Content-Type': 'application/json', 'X-TCRS': '1' },
           body: json, keepalive: !!keepalive && json.length < 60000
         });
@@ -416,7 +416,7 @@
     lsDel(lastKey());
     if (remote.online && !remote.conflict) {
       fetch(API_BASE + '/api/state/' + encodeURIComponent(key), {
-        method: 'PUT', credentials: 'same-origin',
+        method: 'PUT', credentials: 'include',
         headers: { 'Content-Type': 'application/json', 'X-TCRS': '1' },
         body: JSON.stringify({ baseRev: remote.revs[key] || 0, files: null })
       }).then(function (r) { return r.ok ? r.json() : null; })
@@ -511,7 +511,7 @@
 
   async function fetchSheet(url) {
     var r = await fetch(API_BASE + '/api/sheet?url=' + gsEscape(url),
-      { credentials: 'same-origin', headers: { 'X-TCRS': '1' } });
+      { credentials: 'include', headers: { 'X-TCRS': '1' } });
     if (r.status === 401) { location.href = 'login'; throw new Error('login required'); }
     if (!r.ok) throw new Error((await r.json().catch(function () { return {}; })).error || 'HTTP ' + r.status);
     return r.json();
@@ -1861,7 +1861,7 @@
     $('sync-pill').addEventListener('click', function () { if (remote.conflict) location.reload(); });
     $('btn-logout').addEventListener('click', async function () {
       flushSave();
-      try { await fetch(API_BASE + '/api/logout', { method: 'POST', credentials: 'same-origin', headers: { 'X-TCRS': '1' } }); } catch (e) { }
+      try { await fetch(API_BASE + '/api/logout', { method: 'POST', credentials: 'include', headers: { 'X-TCRS': '1' } }); } catch (e) { }
       location.href = 'login';
     });
 
@@ -1962,7 +1962,7 @@
     var auto = /^#auto/.test(location.hash);
     if (location.protocol === 'http:' || location.protocol === 'https:') {
       try {
-        var r = await fetch(API_BASE + '/api/state', { credentials: 'same-origin', headers: { 'X-TCRS': '1' } });
+        var r = await fetch(API_BASE + '/api/state', { credentials: 'include', headers: { 'X-TCRS': '1' } });
         if (r.status === 401) { location.href = 'login'; return; }
         if (r.ok) {
           remote.doc = await r.json();

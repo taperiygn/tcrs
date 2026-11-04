@@ -26,6 +26,7 @@
     go.disabled = true;
     try {
       var r = await fetch((window.TCRS_API_BASE || '') + '/api/login', {
+        credentials: 'include',
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-TCRS': '1' },
         body: JSON.stringify({ password: document.getElementById('pw').value })
