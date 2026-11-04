@@ -155,6 +155,20 @@ class Store:
                 if field in patch:
                     if patch[field] is None:
                         rec.pop(field, None)
+                    elif field == "files":
+                        # partial update: each of icrf / tl may be sent alone;
+                        # null removes that workbook, absent means unchanged
+                        merged = dict(rec.get("files") or {})
+                        for part in ("icrf", "tl"):
+                            if part in patch["files"]:
+                                if patch["files"][part] is None:
+                                    merged.pop(part, None)
+                                else:
+                                    merged[part] = patch["files"][part]
+                        if merged:
+                            rec["files"] = merged
+                        else:
+                            rec.pop("files", None)
                     else:
                         rec[field] = patch[field]
             rec["rev"] = cur + 1
@@ -435,8 +449,10 @@ class Handler(BaseHTTPRequestHandler):
             return
         if "files" in body and body["files"] is not None:
             f = body["files"]
-            if not isinstance(f, dict) or not all(isinstance(f.get(k), dict) for k in ("icrf", "tl")):
-                return self.send_json(400, {"error": "files must contain icrf and tl"})
+            if not isinstance(f, dict) or any(
+                    k in f and not (f[k] is None or isinstance(f[k], dict))
+                    for k in ("icrf", "tl")):
+                return self.send_json(400, {"error": "files must contain icrf and/or tl (workbook objects or null)"})
         ok, rev = STORE.put(m.group(1), body)
         if rev == -1:
             return self.send_json(507, {"error": "too many saved months"})

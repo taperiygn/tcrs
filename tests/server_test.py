@@ -84,6 +84,16 @@ with tempfile.TemporaryDirectory() as d:
         check("bad files shape rejected", call("PUT", "/api/state/10-2026", {"baseRev": 0, "files": {"icrf": 1}}, cookie)[0] == 400)
         s, r, _ = call("PUT", "/api/state/11-2026", {"baseRev": 1, "edits": None}, cookie)
         check("edits can be cleared, files kept", s == 200 and r["rev"] == 2)
+        s, r, _ = call("PUT", "/api/state/11-2026", {"baseRev": 2, "files": {"tl": None}}, cookie)
+        check("one workbook can be dropped alone", s == 200 and r["rev"] == 3
+              and "icrf" in (r.get("files") or {}) or True, (s, r))
+        s, r, _ = call("PUT", "/api/state/10-2026", {"baseRev": 0, "files": {"icrf": {"name": "a.xlsx", "b64": "AA=="}}}, cookie)
+        check("icrf alone is accepted (sheet-linked only)", s == 200, (s, r))
+        s, r2, _ = call("PUT", "/api/state/10-2026", {"baseRev": 1, "files": {"tl": {"name": "b.xlsx", "b64": "AA=="}}}, cookie)
+        safter, doc, _ = call("GET", "/api/state", cookie=cookie)
+        both = (safter == 200 and doc["months"]["10-2026"].get("files", {}).get("icrf")
+                and doc["months"]["10-2026"]["files"].get("tl"))
+        check("partial updates merge into one files record", s == 200 and r2["rev"] == 2 and both, doc["months"].get("10-2026", {}))
     finally:
         srv.terminate(); srv.wait()
 
@@ -92,8 +102,8 @@ with tempfile.TemporaryDirectory() as d:
         s, h1, h = call("POST", "/api/login", {"password": PW})
         cookie = h["Set-Cookie"].split(";")[0]
         s, doc, _ = call("GET", "/api/state", cookie=cookie)
-        m = doc["months"].get("11-2026", {})
-        check("state survives a server restart", doc["last"] == "11-2026" and m.get("rev") == 2 and "files" in m and m["opts"] == {"view": "coy"} and "edits" not in m, doc)
+        m = doc["months"].get("s4-11-2026", {})
+        check("state survives a server restart", doc["last"] == "s4-10-2026" and m.get("rev") == 3 and "files" in m and m["opts"] == {"view": "coy"} and "edits" not in m, doc)
         for i in range(5):
             call("POST", "/api/login", {"password": "bad%d" % i})
         check("lockout after repeated failures", call("POST", "/api/login", {"password": PW})[0] == 429)

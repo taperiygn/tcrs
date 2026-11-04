@@ -241,7 +241,7 @@
       v: 3, at: Date.now(), updatedAt: e.updatedAt,
       entries: e.entries, tlLines: e.tlLines, skipped: e.skipped, opts: o
     }));
-    if (remote.localFilesDirty && state.files.icrf && state.files.tl) {
+    if (remote.localFilesDirty && (state.files.icrf || state.files.tl)) {
       if (lsSet(filesKey(), JSON.stringify(state.files))) remote.localFilesDirty = false;
     }
     lsSet(lastKey(), key);
@@ -259,8 +259,8 @@
         pushAgain = false;
         var key = monthKey();
         var body = { baseRev: remote.revs[key] || 0, edits: editsPayload(), opts: currentOpts() };
-        var sendingFiles = remote.filesDirty && state.files.icrf && state.files.tl;
-        if (sendingFiles) body.files = state.files;
+        var sendingFiles = remote.filesDirty && (state.files.icrf || state.files.tl);
+        if (sendingFiles) body.files = { icrf: state.files.icrf, tl: state.files.tl };
         var json = JSON.stringify(body);
         var r = await fetch(API_BASE + '/api/state/' + encodeURIComponent(key), {
           method: 'PUT', credentials: 'include',
@@ -1994,14 +1994,21 @@
     if (!key) return;
 
     var files = rRec && key === rl && rRec.files, fromLocal = false;
-    if (!files || !files.icrf || !files.tl) {
+    if (!files || !(files.icrf || files.tl)) {
       try { files = JSON.parse(lsGet(filesKey(key)) || 'null'); fromLocal = true; } catch (e) { files = null; }
     }
-    if (!files || !files.icrf || !files.tl) return;
+    if (!files || !(files.icrf || files.tl)) return;
     try {
-      state.icrfWb = await loadWorkbook(b64ToBuf(files.icrf.b64)); state.icrfName = files.icrf.name;
-      state.tlWb = await loadWorkbook(b64ToBuf(files.tl.b64)); state.tlName = files.tl.name;
       state.files = { icrf: files.icrf, tl: files.tl };
+      state.icrfWb = state.tlWb = state.icrfName = state.tlName = null;
+      if (files.icrf) {
+        state.icrfWb = await loadWorkbook(b64ToBuf(files.icrf.b64)); state.icrfName = files.icrf.name;
+        renderUploadStatus('icrf', { ok: true, msg: 'restored — ' + state.icrfWb.worksheets[0].name });
+      }
+      if (files.tl) {
+        state.tlWb = await loadWorkbook(b64ToBuf(files.tl.b64)); state.tlName = files.tl.name;
+        renderUploadStatus('tl', { ok: true, msg: 'restored — ' + state.tlWb.worksheets[0].name });
+      }
       remote.filesDirty = fromLocal && remote.online;
       remote.localFilesDirty = false;
       if (!fromLocal) lsSet(filesKey(key), JSON.stringify(state.files));
