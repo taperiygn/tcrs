@@ -460,7 +460,14 @@ class Handler(BaseHTTPRequestHandler):
         self.send_json(200, {"ok": True})
 
     def cookie(self, value, max_age):
-        parts = ["%s=%s" % (COOKIE, value), "Path=/", "HttpOnly", "SameSite=Lax", "Max-Age=%d" % max_age]
+        parts = ["%s=%s" % (COOKIE, value), "Path=/", "HttpOnly", "Max-Age=%d" % max_age]
+        if TRUST_PROXY:
+            # Cross-site split deployment (Pages + Cloud Run / PaaS): browsers
+            # only attach cookies to cross-origin API calls with None + Secure.
+            parts += ["SameSite=None", "Secure"]
+        else:
+            # Same-origin single-host serving: keep the safer default.
+            parts.append("SameSite=Lax")
         if self.is_https():
             parts.append("Secure")
         return "; ".join(parts)
