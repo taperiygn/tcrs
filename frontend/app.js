@@ -264,10 +264,10 @@
         var json = JSON.stringify(body);
         var r = await fetch(API_BASE + '/api/state/' + encodeURIComponent(key), {
           method: 'PUT', credentials: 'include',
-          headers: { 'Content-Type': 'application/json', 'X-TCRS': '1' },
+          headers: apiHeaders(true),
           body: json, keepalive: !!keepalive && json.length < 60000
         });
-        if (r.status === 401) { location.href = 'login'; return; }
+        if (r.status === 401) { dropToken(); location.href = 'login'; return; }
         if (r.status === 409) {
           remote.conflict = true;
           setSync('err', 'Changed elsewhere — click to reload', 'Another device saved newer edits. Reload to load them; this tab will not overwrite them.');
@@ -417,7 +417,7 @@
     if (remote.online && !remote.conflict) {
       fetch(API_BASE + '/api/state/' + encodeURIComponent(key), {
         method: 'PUT', credentials: 'include',
-        headers: { 'Content-Type': 'application/json', 'X-TCRS': '1' },
+        headers: apiHeaders(true),
         body: JSON.stringify({ baseRev: remote.revs[key] || 0, files: null })
       }).then(function (r) { return r.ok ? r.json() : null; })
         .then(function (d) { if (d) remote.revs[key] = d.rev; }).catch(function () { });
@@ -509,10 +509,21 @@
 
   function gsEscape(url) { return encodeURIComponent(String(url || '').trim()); }
 
+  /* Session token from the login response — sent as a header because
+     browsers may block third-party cookies on the Pages→API split. */
+  function apiHeaders(json) {
+    var h = { 'X-TCRS': '1' };
+    var t = lsGet('tcrs:token');
+    if (t) h['Authorization'] = 'Bearer ' + t;
+    if (json) h['Content-Type'] = 'application/json';
+    return h;
+  }
+  function dropToken() { lsDel('tcrs:token'); }
+
   async function fetchSheet(url) {
     var r = await fetch(API_BASE + '/api/sheet?url=' + gsEscape(url),
-      { credentials: 'include', headers: { 'X-TCRS': '1' } });
-    if (r.status === 401) { location.href = 'login'; throw new Error('login required'); }
+      { credentials: 'include', headers: apiHeaders(false) });
+    if (r.status === 401) { dropToken(); location.href = 'login'; throw new Error('login required'); }
     if (!r.ok) throw new Error((await r.json().catch(function () { return {}; })).error || 'HTTP ' + r.status);
     return r.json();
   }
@@ -1861,7 +1872,8 @@
     $('sync-pill').addEventListener('click', function () { if (remote.conflict) location.reload(); });
     $('btn-logout').addEventListener('click', async function () {
       flushSave();
-      try { await fetch(API_BASE + '/api/logout', { method: 'POST', credentials: 'include', headers: { 'X-TCRS': '1' } }); } catch (e) { }
+      try { await fetch(API_BASE + '/api/logout', { method: 'POST', credentials: 'include', headers: apiHeaders(false) }); } catch (e) { }
+      dropToken();
       location.href = 'login';
     });
 
@@ -1962,8 +1974,8 @@
     var auto = /^#auto/.test(location.hash);
     if (location.protocol === 'http:' || location.protocol === 'https:') {
       try {
-        var r = await fetch(API_BASE + '/api/state', { credentials: 'include', headers: { 'X-TCRS': '1' } });
-        if (r.status === 401) { location.href = 'login'; return; }
+        var r = await fetch(API_BASE + '/api/state', { credentials: 'include', headers: apiHeaders(false) });
+        if (r.status === 401) { dropToken(); location.href = 'login'; return; }
         if (r.ok) {
           remote.doc = await r.json();
           remote.online = true;

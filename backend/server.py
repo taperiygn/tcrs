@@ -285,6 +285,12 @@ class Handler(BaseHTTPRequestHandler):
         return FORCE_SECURE or (TRUST_PROXY and self.headers.get("X-Forwarded-Proto", "") == "https")
 
     def authed(self):
+        auth = self.headers.get("Authorization", "")
+        if auth.startswith("Bearer ") and AUTH.valid_token(auth[7:].strip()):
+            return True
+        sess = self.headers.get("X-TCRS-Session", "")
+        if sess and AUTH.valid_token(sess):
+            return True
         for part in self.headers.get("Cookie", "").split(";"):
             name, _, val = part.strip().partition("=")
             if name == COOKIE and AUTH.valid_token(val):
@@ -499,8 +505,12 @@ class Handler(BaseHTTPRequestHandler):
         given = body.get("password")
         if isinstance(given, str) and AUTH.check_password(given):
             AUTH.record_ok(ip)
-            return self.send_json(200, {"ok": True},
-                                  [("Set-Cookie", self.cookie(AUTH.make_token(), int(SESSION_DAYS * 86400)))])
+            token = AUTH.make_token()
+            # A token in the body is the reliable path for split deployments
+            # (static Pages + API host): browsers may block third-party
+            # cookies, but an Authorization header always goes through.
+            return self.send_json(200, {"ok": True, "token": token},
+                                  [("Set-Cookie", self.cookie(token, int(SESSION_DAYS * 86400)))])
         AUTH.record_fail(ip)
         time.sleep(0.6)
         self.send_json(401, {"error": "Wrong password."})

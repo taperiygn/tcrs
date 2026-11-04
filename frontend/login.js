@@ -32,7 +32,11 @@
         body: JSON.stringify({ password: document.getElementById('pw').value })
       });
       var d = await r.json().catch(function () { return {}; });
-      if (r.ok) { location.replace('./'); return; }
+      if (r.ok) {
+        if (d.token) { try { localStorage.setItem('tcrs:token', d.token); } catch (e) { } }
+        location.replace('./');
+        return;
+      }
       msg.textContent = d.error || 'Could not sign in.';
     } catch (err) {
       msg.textContent = 'Could not reach the server.';
