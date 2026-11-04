@@ -267,7 +267,7 @@
           headers: { 'Content-Type': 'application/json', 'X-TCRS': '1' },
           body: json, keepalive: !!keepalive && json.length < 60000
         });
-        if (r.status === 401) { location.href = '/login'; return; }
+        if (r.status === 401) { location.href = 'login'; return; }
         if (r.status === 409) {
           remote.conflict = true;
           setSync('err', 'Changed elsewhere — click to reload', 'Another device saved newer edits. Reload to load them; this tab will not overwrite them.');
@@ -512,7 +512,7 @@
   async function fetchSheet(url) {
     var r = await fetch(API_BASE + '/api/sheet?url=' + gsEscape(url),
       { credentials: 'same-origin', headers: { 'X-TCRS': '1' } });
-    if (r.status === 401) { location.href = '/login'; throw new Error('login required'); }
+    if (r.status === 401) { location.href = 'login'; throw new Error('login required'); }
     if (!r.ok) throw new Error((await r.json().catch(function () { return {}; })).error || 'HTTP ' + r.status);
     return r.json();
   }
@@ -1862,7 +1862,7 @@
     $('btn-logout').addEventListener('click', async function () {
       flushSave();
       try { await fetch(API_BASE + '/api/logout', { method: 'POST', credentials: 'same-origin', headers: { 'X-TCRS': '1' } }); } catch (e) { }
-      location.href = '/login';
+      location.href = 'login';
     });
 
     document.querySelectorAll('.acc-head').forEach(function (h) {
@@ -1963,7 +1963,7 @@
     if (location.protocol === 'http:' || location.protocol === 'https:') {
       try {
         var r = await fetch(API_BASE + '/api/state', { credentials: 'same-origin', headers: { 'X-TCRS': '1' } });
-        if (r.status === 401) { location.href = '/login'; return; }
+        if (r.status === 401) { location.href = 'login'; return; }
         if (r.ok) {
           remote.doc = await r.json();
           remote.online = true;
