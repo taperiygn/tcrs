@@ -132,6 +132,9 @@
     A.setSrc('clash');
     ok('clash tab opens', document.getElementById('btn-src-clash').classList.contains('on') &&
       document.getElementById('clash-container').style.display === '');
+    ok('clash tab scrolls vertically',
+      getComputedStyle(document.getElementById('clash-container')).overflowY === 'auto',
+      getComputedStyle(document.getElementById('clash-container')).overflowY);
     ok('tab button carries the red+tight count',
       txt(document.getElementById('btn-src-clash')).indexOf('· 1') > -1,
       txt(document.getElementById('btn-src-clash')));
