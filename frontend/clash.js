@@ -1,7 +1,7 @@
 /* TCRS bus-clash checker.
    Simulates the school's small bus fleet across each day and flags:
-   - red    a trip that cannot run (buses not at the origin in time, or
-            more buses asked for than exist)
+   - red    a trip that cannot run (buses not at the origin in time, more
+            buses asked for than exist, or the bus count is missing)
    - orange a trip the buses can only just make if they drive fast
             (shortfall within GRACE_MIN minutes)
    - purple a trip that starts before the day's first legal movement time
@@ -96,14 +96,19 @@
         if (s === null || d === null) { unchecked++; return; }   // unknown route/time
         checked++;
 
-        var need = e.qty === null || e.qty === undefined ? 1 : (+e.qty || 0);
+        var need = Math.round(+(e.qty === null || e.qty === undefined ? NaN : e.qty));
         var base = {
-          id: e.id, date: day, time: e.timeStart, qty: need,
+          id: e.id, date: day, time: e.timeStart, qty: isNaN(need) ? null : need,
           route: normalizeLoc(e.from) + ' → ' + normalizeLoc(e.to),
           activity: e.activity || '', coys: e.coys || [], from: normalizeLoc(e.from), to: normalizeLoc(e.to),
           dur: d
         };
 
+        if (isNaN(need) || need <= 0) {
+          flags.push(Object.assign({ severity: 'red',
+            msg: 'number of buses missing — fill in how many this trip needs' }, base));
+          return;
+        }
         if (need > fleet) {
           flags.push(Object.assign({ severity: 'red',
             msg: 'asks for ' + need + ' buses — the school only has ' + fleet }, base));

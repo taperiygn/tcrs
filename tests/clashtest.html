@@ -51,6 +51,15 @@
     ok('asking for 5 buses is a clash', sev(r.flags) === 'red' && /5 buses/.test(r.flags[0].msg),
       JSON.stringify(r.flags));
 
+    r = C.analyze([mk(D, '0800', 'MTL', 'RHC', null), mk(D, '0830', 'MTL', 'RHC', 4)]);
+    ok('missing bus count is red and the trip is not simulated',
+      sev(r.flags) === 'red' && /missing/.test(r.flags[0].msg) && r.checked === 2,
+      JSON.stringify(r.flags) + ' checked=' + r.checked);
+
+    r = C.analyze([mk(D, '0800', 'MTL', 'RHC', 0)]);
+    ok('a zero bus count is treated as missing too', sev(r.flags) === 'red' && /missing/.test(r.flags[0].msg),
+      JSON.stringify(r.flags));
+
     r = C.analyze([mk(D, '0645', 'MTL', 'RHC', 4)]);
     ok('pre-0700 start is flagged for permission', sev(r.flags) === 'perm', JSON.stringify(r.flags));
 
