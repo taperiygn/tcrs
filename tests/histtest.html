@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>edit history test</title>
+<style>.toast,.bgwash{display:none}body{background:#fff;margin:0}</style>
+<link rel="stylesheet" href="../styles.css">
+<script src="../vendor/exceljs.min.js"></script>
+<script src="../parser.js"></script>
+</head><body>
+<pre id="test-out">starting…</pre>
+<script>
+/* Edit-history verification: drives the real save stream (commitICRF,
+   addIcrfRow, delIcrf, applyTLText, applySheetData, resetEdits) against
+   inline-built workbooks and checks the recorded events, persistence and
+   the left-rail accordion. */
+(async function () {
+  var out = [], failures = 0;
+  function ok(name, cond, extra) {
+    out.push((cond ? 'PASS ' : 'FAIL ') + name + (cond ? '' : '  [' + (extra === undefined ? '' : extra) + ']'));
+    if (!cond) failures++;
+  }
+  function log() { document.getElementById('test-out').textContent = out.join('\n'); }
+  function txt(el) { return el ? el.textContent : ''; }
+  var A;
+
+  var ICRF_H1 = [, 'Resource', , , 'Execution Time', , , , 'Location', , 'POC Details', , ,];
+  var ICRF_H2 = [, 'Type of Veh', 'Qty', 'Required TO', 'Start', , 'End', , 'Reporting', 'Destination', 'Conducting Officer', 'Contact No.', 'Unit', 'Remarks'];
+  function icrfRow(act) {
+    return ['SCH 4 - 4TH COY - ' + act, 'LUV', 2, 2, '3/11/26', '11:00', '3/11/26', '13:00', '4TH', 'HG RANGE', '3WO TEST', '84980951', 'SCH 4', ''];
+  }
+  function buildIcrf(acts) {
+    var wb = new ExcelJS.Workbook();
+    var ws = wb.addWorksheet('NOVEMBER');
+    ws.getRow(1).values = ICRF_H1.slice();
+    ws.getRow(2).values = ICRF_H2.slice();
+    acts.forEach(function (a, i) { ws.getRow(3 + i).values = icrfRow(a).slice(); });
+    return wb;
+  }
+  function buildTl() {
+    var wb = new ExcelJS.Workbook();
+    var ws = wb.addWorksheet('NOVEMBER TL');
+    ws.getRow(1).values = ['NOVEMBER TL'];
+    ws.getRow(2).getCell(1).value = new Date(2026, 10, 3);
+    return wb;
+  }
+  async function toFile(wb, name) { return new File([await wb.xlsx.writeBuffer()], name); }
+
+  try {
+    var html = await fetch('../index.html').then(function (r) { return r.text(); });
+    var doc = new DOMParser().parseFromString(html, 'text/html');
+    document.body.appendChild(doc.querySelector('header'));
+    document.body.appendChild(doc.querySelector('main'));
+    document.body.appendChild(doc.querySelector('.toast'));
+
+    window.__TCRS_TEST_MODE = true;
+    eval(await fetch('../app.js').then(function (r) { return r.text(); }));
+    eval(await fetch('../sheet.js').then(function (r) { return r.text(); }));
+    A = window.__tcrs;
+    localStorage.clear();
+
+    await A.handleFile(await toFile(buildIcrf(['NOV ROW 1', 'NOV ROW 2', 'NOV ROW 3', 'NOV ROW 4', 'NOV ROW 5']), 'icrf.xlsx'), 'icrf');
+    await A.handleFile(await toFile(buildTl(), 'troop lift.xlsx'), 'tl');
+    ok('combined, history starts empty',
+      !!A.state.model && A.state.history.length === 0 &&
+      txt(document.getElementById('hist-count')) === '0',
+      A.state.history.length + ' / ' + txt(document.getElementById('hist-count')));
+
+    /* live-sheet cell edit → one diff event per save burst */
+    var row0 = A.state.entries[0];
+    var r = A.commitICRF(row0.id, 'from', 'HIST DEPOT');
+    ok('commitICRF accepted', r.ok, JSON.stringify(r));
+    A.flushSave();
+    ok('cell edit recorded as one diff event',
+      A.state.history.length === 1 && A.state.history[0].text === 'Live sheet — 1 changed' &&
+      A.state.history[0].src === 'edit',
+      JSON.stringify(A.state.history[0]));
+    var before = A.state.history.length;
+    A.flushSave();                       // no pending save → no event
+    ok('a flush with nothing pending records nothing', A.state.history.length === before,
+      A.state.history.length);
+
+    /* manual row add + delete */
+    A.addIcrfRow();
+    A.flushSave();
+    ok('added row recorded', A.state.history[0].text === 'Live sheet — 1 added',
+      JSON.stringify(A.state.history[0]));
+    var manual = A.state.entries.filter(function (e) { return e.source === 'MANUAL'; })[0];
+    A.delIcrf(manual.id);
+    A.flushSave();
+    ok('deleted row recorded', A.state.history[0].text === 'Live sheet — 1 removed',
+      JSON.stringify(A.state.history[0]));
+
+    /* Troop-lift text update records itself */
+    var t = A.tlText() + '\n0915 MTL - RHC 2 BUSES (4TH HIST TL EDIT)';
+    var tr = A.applyTLText(t);
+    ok('TL text applied', !!tr && A.state.entries.some(function (e) { return e.activity === 'HIST TL EDIT'; }),
+      'acts=' + A.state.entries.map(function (e) { return e.source + ':' + e.activity; }).join(','));
+    A.flushSave();
+    ok('TL text update recorded',
+      A.state.history[0].src === 'tl' && A.state.history[0].text === 'Troop lift text updated — 1 added',
+      JSON.stringify(A.state.history[0]));
+
+    /* Google Sheet sync records itself with counts */
+    var wb2 = buildIcrf(['NOV ROW 1B', 'NOV ROW 2', 'NOV ROW 3', 'NOV ROW 4', 'NOV ROW 5', 'NOV ROW 6']);
+    A.applySheetData(wb2, true);
+    A.flushSave();
+    ok('sheet sync recorded with counts',
+      A.state.history[0].src === 'sheet' &&
+      A.state.history[0].text === 'Google Sheet sync — 1 added, 1 changed',
+      JSON.stringify(A.state.history[0]));
+
+    /* reset records itself and survives the touched=false fallback */
+    A.resetEdits();
+    A.flushSave();
+    ok('reset recorded', A.state.history[0].src === 'reset' &&
+      A.state.history[0].text === 'Edits reset to the parsed data',
+      JSON.stringify(A.state.history[0]));
+    var sk = 'tcrs:v3:s4:' + A.state.model.month + '-' + A.state.model.year;
+    var rec = JSON.parse(localStorage.getItem(sk) || '{}');
+    ok('reset event persisted even though edits were forgotten',
+      Array.isArray(rec.history) && rec.history.length === 6 && rec.history[0].src === 'reset',
+      (rec.history || []).length + ' events in store');
+
+    /* history comes back after a fresh combine (what a reload does) */
+    A.state.model = null;
+    A.maybeCombine();
+    ok('history restored on recombine', A.state.history.length === 6 &&
+      A.state.history[0].src === 'reset', A.state.history.length);
+
+    /* cap at 50 events */
+    var target = A.state.entries[0].id;
+    for (var i = 0; i < 55; i++) {
+      A.commitICRF(target, 'from', 'HIST LOOP ' + i);
+      A.flushSave();
+    }
+    ok('history capped at 50', A.state.history.length === 50, A.state.history.length);
+
+    /* the accordion renders newest-first with an overflow line */
+    ok('accordion count shows the cap', txt(document.getElementById('hist-count')) === '50',
+      txt(document.getElementById('hist-count')));
+    var rows = document.querySelectorAll('#hist-list .hrow');
+    ok('list shows 15 rows + overflow line', rows.length === 16 &&
+      /and 35 earlier/.test(txt(rows[15])), rows.length + ' rows');
+    ok('newest first', txt(rows[0]).indexOf('Live sheet — 1 changed') > -1, txt(rows[0]));
+    var head = document.querySelector('#acc-history .acc-head');
+    head.click();
+    ok('accordion opens on click', document.getElementById('acc-history').classList.contains('open'));
+    head.click();
+    ok('accordion closes on click', !document.getElementById('acc-history').classList.contains('open'));
+
+    localStorage.clear();
+  } catch (e) {
+    failures++;
+    out.push('CRASH ' + (e && e.stack || e));
+  }
+  log();
+  document.title = failures ? 'HIST FAILED' : 'HIST OK';
+})();
+</script></body></html>

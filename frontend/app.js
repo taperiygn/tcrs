@@ -18,6 +18,7 @@
     restoredAt: null,       // timestamp when localStorage edits were restored
     tlLines: [],            // Troop-lift sheet as live lines ({row,kind,date,text,status,entryId})
     skipped: [],            // ICRF rows behind the template (`s`-prefixed ids in the grid)
+    history: [],            // recent-changes trail ({at,src,text}), newest first — saved with the edits
     tab: 'schedule',
     srcTab: 'icrf',
     view: 'date',           // schedule grouping
@@ -228,21 +229,23 @@
     if (!remote.conflict) setSync('busy', 'Saving…');
   }
   function editsPayload() {         // null = nothing edited, the parsed workbooks are the truth
-    if (!state.touched) return null;
+    if (!state.touched && !(state.history && state.history.length)) return null;
     return {
       updatedAt: new Date().toISOString(),
-      entries: state.entries, tlLines: state.tlLines, skipped: state.skipped
+      entries: state.entries, tlLines: state.tlLines, skipped: state.skipped,
+      history: state.history
     };
   }
   function flushSave(keepalive) {
     clearTimeout(saveTimer);
     if (!savePending || !state.model) return;
     savePending = false;
-    var e = editsPayload() || { updatedAt: new Date().toISOString(), entries: [], tlLines: [], skipped: [] };
+    recordHistoryTick();
+    var e = editsPayload() || { updatedAt: new Date().toISOString(), entries: [], tlLines: [], skipped: [], history: state.history };
     var o = currentOpts(), key = monthKey();
     var okLocal = lsSet(storeKey(), JSON.stringify({
       v: 3, at: Date.now(), updatedAt: e.updatedAt,
-      entries: e.entries, tlLines: e.tlLines, skipped: e.skipped, opts: o
+      entries: e.entries, tlLines: e.tlLines, skipped: e.skipped, history: e.history || [], opts: o
     }));
     if (remote.localFilesDirty && (state.files.icrf || state.files.tl)) {
       if (lsSet(filesKey(), JSON.stringify(state.files))) remote.localFilesDirty = false;
@@ -250,6 +253,65 @@
     lsSet(lastKey(), key);
     if (remote.online) pushRemote(keepalive === true);
     else setSync('local', okLocal ? 'Saved on this device' : 'Not saved — storage unavailable');
+  }
+
+  /* ------------------------------------------------- edit history -- */
+  /* Small audit trail of what changed this month, stored inside the edits
+     payload (opaque to the server). One event per save burst: live-sheet
+     cell edits are diffed against the previous save; named actions (sheet
+     sync, Troop-lift text, reset) record themselves as they happen. */
+  var HIST_MAX = 50, histLast = {}, histNote = null;
+
+  function histSig() {
+    var m = {};
+    state.entries.forEach(function (e) {
+      m[e.id] = [e.activity, e.date, e.eDate, e.timeStart, e.timeEnd, e.from, e.to, e.qty,
+        (e.coys || []).join('+')].join('|');
+    });
+    return m;
+  }
+  function pushHistory(src, text) {
+    state.history.unshift({ at: new Date().toISOString(), src: src, text: text });
+    if (state.history.length > HIST_MAX) state.history.length = HIST_MAX;
+    renderHistory();
+  }
+  function recordHistoryTick() {
+    var note = histNote; histNote = null;
+    var sig = histSig(), added = 0, changed = 0, removed = 0;
+    Object.keys(sig).forEach(function (id) {
+      if (!(id in histLast)) added++;
+      else if (sig[id] !== histLast[id]) changed++;
+    });
+    Object.keys(histLast).forEach(function (id) { if (!(id in sig)) removed++; });
+    histLast = sig;
+    if (note) { pushHistory(note.src, note.text); return; }
+    if (!added && !changed && !removed) return;
+    var parts = [];
+    if (added) parts.push(added + ' added');
+    if (changed) parts.push(changed + ' changed');
+    if (removed) parts.push(removed + ' removed');
+    pushHistory('edit', 'Live sheet — ' + parts.join(', '));
+  }
+  function histWhen(iso) {
+    var d = new Date(iso);
+    if (!iso || isNaN(d)) return '';
+    var t = ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+    if (d.toDateString() === new Date().toDateString()) return t;
+    return d.getDate() + ' ' + ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getMonth()] + ', ' + t;
+  }
+  function renderHistory() {
+    var count = $('hist-count');
+    if (!count) return;                     // rail not present (tests inject partial DOM)
+    var h = state.history || [];
+    count.textContent = h.length;
+    count.classList.toggle('zero', h.length === 0);
+    var rows = h.slice(0, 15).map(function (ev) {
+      return '<div class="hrow"><span class="when">' + esc(histWhen(ev.at)) +
+        '</span><span>' + esc(ev.text) + '</span></div>';
+    });
+    if (h.length > 15) rows.push('<div class="hrow more">…and ' + (h.length - 15) + ' earlier</div>');
+    $('hist-list').innerHTML = h.length ? rows.join('') : '<div class="empty">nothing yet this month</div>';
   }
 
   var pushing = false, pushAgain = false;
@@ -306,6 +368,7 @@
     return {
       v: 3, hasEdits: has, updatedAt: (ed && ed.updatedAt) || rec.savedAt,
       entries: has ? ed.entries : [], tlLines: has ? ed.tlLines : [], skipped: has ? ed.skipped : [],
+      history: (ed && Array.isArray(ed.history)) ? ed.history : [],
       opts: rec.opts, _remote: true
     };
   }
@@ -323,6 +386,7 @@
 
   function resetEdits() {
     if (!state.pristine) return;
+    histNote = { src: 'reset', text: 'Edits reset to the parsed data' };
     discardStore(true);
     state.entries = JSON.parse(JSON.stringify(state.pristine.entries));
     state.tlLines = JSON.parse(JSON.stringify(state.pristine.tlLines));
@@ -695,6 +759,13 @@
     $('btn-print').disabled = false;
     setSrc(state.srcTab);
     setTab(state.tab);
+    if (added || updated || removed) {
+      var hp = [];
+      if (added) hp.push(added + ' added');
+      if (updated) hp.push(updated + ' changed');
+      if (removed) hp.push(removed + ' removed');
+      histNote = { src: 'sheet', text: 'Google Sheet sync — ' + hp.join(', ') };
+    }
     saveStore();
     if (manual) {
       toast('<b>Sheet refreshed.</b> ' +
@@ -735,6 +806,7 @@
 
     if (!model) {
       state.model = null; state.entries = []; state.restoredAt = null; state.touched = false;
+      histLast = {}; histNote = null;
       $('sync-pill').hidden = true;
       state.tlLines = []; state.skipped = [];
       $('results').hidden = true;
@@ -778,6 +850,7 @@
       state.skipped = JSON.parse(JSON.stringify(model.icrfSkipped));
       state.restoredAt = null;
     }
+    state.history = (saved && Array.isArray(saved.history)) ? saved.history : [];
 
     // companies added by manual rows in an earlier session
     state.entries.forEach(function (e) {
@@ -805,6 +878,7 @@
 
     // line ids (used by the live sheet and manual lines)
     normalizeTLLines();
+    histLast = histSig();             // history diff baseline = what is on screen now
 
     syncControls();
     renderChips();
@@ -1237,6 +1311,10 @@
     state.tlLines = lines;
     normalizeTLLines();
     saveStore();
+    var hparts = [];
+    if (added) hparts.push(added + ' added');
+    if (dropped) hparts.push(dropped + ' removed');
+    histNote = { src: 'tl', text: 'Troop lift text updated' + (hparts.length ? ' — ' + hparts.join(', ') : '') };
     changed();
     rerenderSrc();
     return {
@@ -1427,6 +1505,7 @@
     fill('unmatch-list', 'unmatch-count', um, function (u) {
       return '<div class="rowmsg"><span class="r">line ' + u.row + '</span><span>“' + esc(u.text) + '”</span></div>';
     });
+    renderHistory();
   }
 
   /* ------------------------------------------------------- schedule UI -- */
@@ -2091,6 +2170,7 @@
     setTab: setTab, setSrc: setSrc,
     renderUploadStatus: renderUploadStatus,
     handleFile: handleFile, restoreWorkspace: restoreWorkspace,
-    chosenSheet: chosenSheet, sheetPickerHtml: sheetPickerHtml
+    chosenSheet: chosenSheet, sheetPickerHtml: sheetPickerHtml,
+    applySheetData: applySheetData, pushHistory: pushHistory
   };
 })();

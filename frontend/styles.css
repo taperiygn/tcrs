@@ -335,6 +335,9 @@ body.rail-collapsed .workspace { min-width: 0; }
 .acc-body .empty { color: var(--mint-ink); padding: 3px 0; font-weight: 600; }
 .acc-body .rowmsg { padding: 3px 0; color: var(--ink-soft); display: flex; gap: 8px; }
 .acc-body .rowmsg .r { color: var(--ink-faint); min-width: 56px; font-variant-numeric: tabular-nums; font-size: 11.5px; }
+.acc-body .hrow { display: flex; gap: 8px; padding: 3px 0; color: var(--ink-soft); align-items: baseline; }
+.acc-body .hrow .when { flex: none; min-width: 52px; color: var(--ink-faint); font-variant-numeric: tabular-nums; font-size: 11.5px; }
+.acc-body .hrow.more { color: var(--ink-faint); }
 
 /* -------------------------------------------------------- workspace */
 .workspace { min-width: 0; position: relative; }
