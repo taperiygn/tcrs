@@ -247,6 +247,12 @@ body.rail-collapsed .workspace { min-width: 0; }
 }
 .upstatus .remove:hover { background: #f7d2db; }
 .upstatus .err { color: var(--rose-ink); font-weight: 600; padding: 2px 0; }
+.upstatus .sheetpick { margin-top: 8px; }
+.upstatus .sheetpick label { display: flex; align-items: center; gap: 8px; color: var(--ink-soft); font-weight: 600; }
+.upstatus .sheetpick select {
+  flex: 1; min-width: 0; font: inherit; color: var(--ink); background: #fff;
+  border: 1px solid var(--line); border-radius: 8px; padding: 4px 6px;
+}
 
 /* ------------------------------------------------------ option cards */
 .optcard { display: flex; flex-direction: column; gap: 13px; }

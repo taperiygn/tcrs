@@ -91,7 +91,10 @@
      Each school is a separate profile: every storage key is prefixed with the
      school, so School 4 months and School 2 months never share data. */
   function schoolPart() { return 's' + state.school; }
-  function monthStr(k) { return k || (state.model ? state.model.month + '-' + state.model.year : 'current'); }
+  function monthStr(k) {            // accepts a full month key ('s4-11-2026') or bare ('11-2026')
+    if (k) k = String(k).replace(/^s\d+-/, '');
+    return k || (state.model ? state.model.month + '-' + state.model.year : 'current');
+  }
   function monthKey() { return schoolPart() + '-' + state.model.month + '-' + state.model.year; }
   function storeKey(k) { return 'tcrs:v3:' + schoolPart() + ':' + monthStr(k); }
   function filesKey(k) { return 'tcrs:files:' + schoolPart() + ':' + monthStr(k); }
@@ -289,9 +292,9 @@
   }
 
   /* -- loading -- */
-  function readLocal(key) {          // key = month key, e.g. '11-2026'
+  function readLocal(key) {          // key = month key, e.g. '11-2026' (school prefix tolerated)
     try {
-      var d = JSON.parse(lsGet('tcrs:v3:' + schoolPart() + ':' + key) || 'null');
+      var d = JSON.parse(lsGet(storeKey(key)) || 'null');
       if (d && d.v === 3 && Array.isArray(d.entries)) { d.hasEdits = d.entries.length > 0; return d; }
     } catch (e) { }
     return null;
@@ -374,6 +377,33 @@
     return best;
   }
 
+  /* The user's explicit sheet choice (stored on the file record so it is saved
+     with the workbook) wins; otherwise the best content match is used. */
+  function autoSheet(which, wb) { return which === 'icrf' ? pickICRFSheet(wb) : pickTLSheet(wb); }
+  function chosenSheet(which, wb) {
+    var f = state.files[which], name = f && f.sheet, found = null;
+    if (name) wb.worksheets.forEach(function (ws) { if (ws.name === name) found = ws; });
+    return found || autoSheet(which, wb);
+  }
+  function setSheetChoice(which, name) {
+    var f = state.files[which];
+    if (!f) return;
+    if (name) f.sheet = name; else delete f.sheet;
+    remote.filesDirty = true; remote.localFilesDirty = true;
+    maybeCombine();
+  }
+  function sheetPickerHtml(which) {
+    var wb = which === 'icrf' ? state.icrfWb : state.tlWb;
+    if (!wb || wb.worksheets.length < 2) return '';
+    var f = state.files[which], cur = (f && f.sheet) || '', auto = autoSheet(which, wb);
+    var h = '<div class="sheetpick"><label>Sheet<select class="sheetsel" data-which="' + which + '">' +
+      '<option value=""' + (cur ? '' : ' selected') + '>Auto — ' + esc(auto ? auto.name : '') + '</option>';
+    wb.worksheets.forEach(function (ws) {
+      h += '<option value="' + esc(ws.name) + '"' + (cur === ws.name ? ' selected' : '') + '>' + esc(ws.name) + '</option>';
+    });
+    return h + '</select></label></div>';
+  }
+
   async function handleFile(file, which) {
     if (!file) return;
     if (!/\.xlsx?$/i.test(file.name)) { toast('<b>' + esc(file.name) + '</b> is not an .xlsx workbook.', true); return; }
@@ -403,7 +433,7 @@
     card.classList.toggle('done', !!info.ok);
     if (info.ok) {
       box.innerHTML = '<div class="line"><span>' + esc(info.msg) + '</span>' +
-        '<button class="remove" data-which="' + which + '">remove</button></div>';
+        '<button class="remove" data-which="' + which + '">remove</button></div>' + sheetPickerHtml(which);
     } else {
       box.innerHTML = '<div class="err">⚠ ' + esc(info.msg) + '</div>';
     }
@@ -625,7 +655,7 @@
     try {
       model = T.parseWorkbooks(
         { worksheets: [pickICRFSheet(wb)] },
-        { worksheets: [pickTLSheet(state.tlWb)] },
+        { worksheets: [chosenSheet('tl', state.tlWb)] },
         state.school);
     } catch (err) {
       console.error(err);
@@ -690,8 +720,8 @@
 
     if (state.icrfWb && state.tlWb) {
       try {
-        var icrfSheet = pickICRFSheet(state.icrfWb);
-        var tlSheet = pickTLSheet(state.tlWb);
+        var icrfSheet = chosenSheet('icrf', state.icrfWb);
+        var tlSheet = chosenSheet('tl', state.tlWb);
         model = T.parseWorkbooks(
           { worksheets: [icrfSheet] },
           { worksheets: [tlSheet] },
@@ -1789,6 +1819,11 @@
         clearFile(e.target.getAttribute('data-which'));
       }
     });
+    document.addEventListener('change', function (e) {
+      if (e.target.classList && e.target.classList.contains('sheetsel')) {
+        setSheetChoice(e.target.getAttribute('data-which'), e.target.value);
+      }
+    });
 
     // Google Sheets ICRF source
     if (!TEST_MODE) {
@@ -2015,17 +2050,15 @@
       state.icrfWb = state.tlWb = state.icrfName = state.tlName = null;
       if (files.icrf) {
         state.icrfWb = await loadWorkbook(b64ToBuf(files.icrf.b64)); state.icrfName = files.icrf.name;
-        renderUploadStatus('icrf', { ok: true, msg: 'restored — ' + state.icrfWb.worksheets[0].name });
+        renderUploadStatus('icrf', { ok: true, msg: 'restored — ' + (chosenSheet('icrf', state.icrfWb) || {}).name });
       }
       if (files.tl) {
         state.tlWb = await loadWorkbook(b64ToBuf(files.tl.b64)); state.tlName = files.tl.name;
-        renderUploadStatus('tl', { ok: true, msg: 'restored — ' + state.tlWb.worksheets[0].name });
+        renderUploadStatus('tl', { ok: true, msg: 'restored — ' + (chosenSheet('tl', state.tlWb) || {}).name });
       }
       remote.filesDirty = fromLocal && remote.online;
       remote.localFilesDirty = false;
       if (!fromLocal) lsSet(filesKey(key), JSON.stringify(state.files));
-      renderUploadStatus('icrf', { ok: true, msg: 'restored — ' + state.icrfWb.worksheets[0].name });
-      renderUploadStatus('tl', { ok: true, msg: 'restored — ' + state.tlWb.worksheets[0].name });
       state._gsCsv = null;          // rebuild the sync baseline from the sheet on first self-check
       renderGsRow();
       maybeCombine();
@@ -2056,6 +2089,8 @@
     resetEdits: resetEdits,
     saveStore: saveStore, flushSave: flushSave, flushSchedule: flushSchedule,
     setTab: setTab, setSrc: setSrc,
-    renderUploadStatus: renderUploadStatus
+    renderUploadStatus: renderUploadStatus,
+    handleFile: handleFile, restoreWorkspace: restoreWorkspace,
+    chosenSheet: chosenSheet, sheetPickerHtml: sheetPickerHtml
   };
 })();

@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>sheet picker test</title>
+<style>.toast,.bgwash{display:none}body{background:#fff;margin:0}</style>
+<link rel="stylesheet" href="../styles.css">
+<script src="../vendor/exceljs.min.js"></script>
+<script src="../parser.js"></script>
+</head><body>
+<pre id="test-out">starting…</pre>
+<script>
+/* Month-picker verification: builds multi-sheet ICRF / TL workbooks inline
+   (no fixtures needed), drives the real file-intake path, and checks that
+   auto-pick chooses the content-best sheet, the picker overrides it, and the
+   choice survives a save + restore cycle. */
+(async function () {
+  var out = [], failures = 0;
+  function ok(name, cond, extra) {
+    out.push((cond ? 'PASS ' : 'FAIL ') + name + (cond ? '' : '  [' + (extra === undefined ? '' : extra) + ']'));
+    if (!cond) failures++;
+  }
+  function log() { document.getElementById('test-out').textContent = out.join('\n'); }
+  var A;
+
+  /* --- inline workbook builders (shape proven by the sheet-CSV pipeline) --- */
+  var ICRF_H1 = [, 'Resource', , , 'Execution Time', , , , 'Location', , 'POC Details', , ,];
+  var ICRF_H2 = [, 'Type of Veh', 'Qty', 'Required TO', 'Start', , 'End', , 'Reporting', 'Destination', 'Conducting Officer', 'Contact No.', 'Unit', 'Remarks'];
+  function icrfRow(act, coy) {
+    return ['SCH 4 - ' + coy + ' COY - ' + act, 'LUV', 2, 2, '3/11/26', '11:00', '3/11/26', '13:00', coy, 'HG RANGE', '3WO TEST', '84980951', 'SCH 4', ''];
+  }
+  function addIcrfSheet(wb, name, acts) {
+    var ws = wb.addWorksheet(name);
+    ws.getRow(1).values = ICRF_H1.slice();
+    ws.getRow(2).values = ICRF_H2.slice();
+    acts.forEach(function (a, i) { ws.getRow(3 + i).values = icrfRow(a, a.indexOf('JAN') === 0 ? '5TH' : '4TH').slice(); });
+    return ws;
+  }
+  async function toFile(wb, name) {
+    var buf = await wb.xlsx.writeBuffer();
+    return new File([buf], name);
+  }
+
+  try {
+    var html = await fetch('../index.html').then(function (r) { return r.text(); });
+    var doc = new DOMParser().parseFromString(html, 'text/html');
+    document.body.appendChild(doc.querySelector('header'));
+    document.body.appendChild(doc.querySelector('main'));
+    document.body.appendChild(doc.querySelector('.toast'));
+
+    window.__TCRS_TEST_MODE = true;
+    eval(await fetch('../app.js').then(function (r) { return r.text(); }));
+    eval(await fetch('../sheet.js').then(function (r) { return r.text(); }));
+    A = window.__tcrs;
+    localStorage.clear();
+    ok('app booted in test mode', !!A && A.state.school === 4);
+
+    /* ICRF: three sheets — the middle one has the most SCH rows and must win */
+    var iw = new ExcelJS.Workbook();
+    addIcrfSheet(iw, 'JAN DRAFT', ['JAN ROW A', 'JAN ROW B']);
+    addIcrfSheet(iw, 'NOVEMBER', ['NOV ROW 1', 'NOV ROW 2', 'NOV ROW 3', 'NOV ROW 4', 'NOV ROW 5']);
+    addIcrfSheet(iw, 'Notes', ['just a note', 'another note']);
+
+    /* TL: the sheet with a real date row wins over the title-only one */
+    var tw = new ExcelJS.Workbook();
+    var tlOld = tw.addWorksheet('OLD TL');
+    tlOld.getRow(1).values = ['OLD TL'];
+    var tlNov = tw.addWorksheet('NOVEMBER TL');
+    tlNov.getRow(1).values = ['NOVEMBER TL'];
+    tlNov.getRow(2).getCell(1).value = new Date(2026, 10, 3);
+
+    await A.handleFile(await toFile(iw, 'icrf.xlsx'), 'icrf');
+    await A.handleFile(await toFile(tw, 'troop lift.xlsx'), 'tl');
+
+    ok('auto-pick ICRF takes the sheet with the most SCH rows',
+      A.chosenSheet('icrf', A.state.icrfWb).name === 'NOVEMBER',
+      A.chosenSheet('icrf', A.state.icrfWb) && A.chosenSheet('icrf', A.state.icrfWb).name);
+    ok('auto-pick TL takes the sheet with date rows',
+      A.chosenSheet('tl', A.state.tlWb).name === 'NOVEMBER TL',
+      A.chosenSheet('tl', A.state.tlWb) && A.chosenSheet('tl', A.state.tlWb).name);
+
+    var novActs = ['NOV ROW 1', 'NOV ROW 2', 'NOV ROW 3', 'NOV ROW 4', 'NOV ROW 5'];
+    var got = A.state.entries.map(function (e) { return e.activity; }).sort();
+    ok('combined model came from the auto-picked NOVEMBER sheet',
+      !!A.state.model && got.join(',') === novActs.join(','),
+      got.join(','));
+
+    /* the picker is rendered on both upload cards */
+    var selI = document.querySelector('#icrf-status select.sheetsel');
+    var selT = document.querySelector('#tl-status select.sheetsel');
+    ok('ICRF picker rendered with auto + 3 sheets',
+      !!selI && selI.options.length === 4 &&
+      selI.options[0].text === 'Auto — NOVEMBER' && selI.options[0].selected &&
+      [].some.call(selI.options, function (o) { return o.value === 'JAN DRAFT'; }),
+      selI ? selI.options.length + ' opts; auto="' + selI.options[0].text + '"' : 'no select');
+    ok('TL picker rendered with auto + 2 sheets',
+      !!selT && selT.options.length === 3 && selT.options[0].text === 'Auto — NOVEMBER TL',
+      selT ? selT.options.length + ' opts' : 'no select');
+    ok('no explicit choice recorded yet', !A.state.files.icrf.sheet && !A.state.files.tl.sheet,
+      JSON.stringify(A.state.files));
+
+    /* overriding to JAN DRAFT re-parses from that sheet */
+    selI.value = 'JAN DRAFT';
+    selI.dispatchEvent(new Event('change', { bubbles: true }));
+    got = A.state.entries.map(function (e) { return e.activity; }).sort();
+    ok('picking JAN DRAFT re-parses from that sheet',
+      got.join(',') === 'JAN ROW A,JAN ROW B', got.join(','));
+    ok('choice recorded on the file record', A.state.files.icrf.sheet === 'JAN DRAFT',
+      A.state.files.icrf.sheet);
+    ok('TL still on auto', !A.state.files.tl.sheet, A.state.files.tl.sheet);
+
+    /* choice survives a save + full restore cycle */
+    A.state.touched = true; A.flushSave();
+    var fk = 'tcrs:files:s4:' + A.state.model.month + '-' + A.state.model.year;
+    var savedFiles = JSON.parse(localStorage.getItem(fk) || '{}');
+    ok('saved files record carries the chosen sheet', savedFiles.icrf && savedFiles.icrf.sheet === 'JAN DRAFT',
+      fk + ' → ' + (savedFiles.icrf && savedFiles.icrf.sheet));
+
+    A.state.icrfWb = A.state.tlWb = null; A.state.icrfName = A.state.tlName = '';
+    A.state.files = { icrf: null, tl: null }; A.state.model = null; A.state.entries = [];
+    await A.restoreWorkspace();
+    got = A.state.entries.map(function (e) { return e.activity; }).sort();
+    ok('after restore the chosen sheet is used again',
+      got.join(',') === 'JAN ROW A,JAN ROW B', got.join(','));
+    ok('restore message names the chosen sheet',
+      document.querySelector('#icrf-status .line span').textContent === 'restored — JAN DRAFT',
+      document.querySelector('#icrf-status .line span').textContent);
+    ok('restored picker shows the saved selection',
+      document.querySelector('#icrf-status select.sheetsel').value === 'JAN DRAFT',
+      document.querySelector('#icrf-status select.sheetsel').value);
+
+    /* back to auto clears the choice; the fresh parse is the content-best sheet
+       (saved edits from the JAN era are still restored on top — by design —
+       so reset first to see the parse itself) */
+    var selI2 = document.querySelector('#icrf-status select.sheetsel');
+    selI2.value = '';
+    selI2.dispatchEvent(new Event('change', { bubbles: true }));
+    ok('choosing Auto clears the stored choice',
+      !A.state.files.icrf.sheet, A.state.files.icrf.sheet);
+    ok('Auto resolves back to the content-best sheet',
+      A.chosenSheet('icrf', A.state.icrfWb).name === 'NOVEMBER',
+      A.chosenSheet('icrf', A.state.icrfWb).name);
+    /* drop the saved JAN-era edits so the recombine shows the fresh parse */
+    localStorage.removeItem('tcrs:v3:s4:' + A.state.model.month + '-' + A.state.model.year);
+    A.maybeCombine();
+    got = A.state.entries.map(function (e) { return e.activity; }).sort();
+    ok('with edits cleared, the NOVEMBER rows are live again',
+      got.join(',') === novActs.join(','), got.join(','));
+
+    localStorage.clear();
+  } catch (e) {
+    failures++;
+    out.push('CRASH ' + (e && e.stack || e));
+  }
+  log();
+  document.title = failures ? 'PICKER FAILED' : 'PICKER OK';
+})();
+</script></body></html>
