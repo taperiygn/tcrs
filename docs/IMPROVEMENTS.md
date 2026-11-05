@@ -29,6 +29,14 @@ User picked two new features: **3 · Month picker** and **5 · Edit history**. E
 - Verified by `tests/histtest.html` (18 assertions over the real save stream, all passing); sheetsel suite re-run green.
 - Both user-chosen features complete. Everything else in this plan remains unapproved — ask before building.
 
+**2026-11-05 — Bus clash checker DONE** (commit e5556b7, live on Pages; user-approved Tier 5 item #1):
+- New "Bus clashes" tab beside the live sheets (user's choice over a rail accordion). Pure simulation in `frontend/clash.js`; recomputed on every save, never stored.
+- Rules from the user: 4 buses total; trip durations MTL↔RHC 15, RHC↔100M RANGE 10, RHC↔FC SITE 6/10/11 10, RHC↔S1 15, RHC↔HG RANGE 10 (returns the same); the MTL→RHC 30-min out-and-back rule emerges from the simulation; 5-min "driving fast" grace (orange below nominal, red below that); buses start each day unplaced (any first origin) and nothing moves before 0700 without special permission (purple).
+- Unknown routes (BIC RANGE, S1–163SQN, AMMO DUMP, SITEST…) are skipped but counted ("N trips not checked") — extend `TRIPS` in clash.js as durations are timed.
+- Normalisation tolerates HG RANGLE, double spaces, 100M RANGE 1/2.
+- Bus rows with a missing or zero qty flag **red** ("number of buses missing") and are left out of the simulation until filled in (user decision; commit cf2dc34).
+- Verified by `tests/clashtest.html` (23 assertions: sim + live tab); all three suites green (58 total).
+
 ---
 
 ## Tier 0 — Hazards to fix first (bugs / traps that bite you today)
