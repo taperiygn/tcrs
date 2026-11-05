@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>bus clash test</title>
+<style>.toast,.bgwash{display:none}body{background:#fff;margin:0}</style>
+<link rel="stylesheet" href="../styles.css">
+<script src="../vendor/exceljs.min.js"></script>
+<script src="../parser.js"></script>
+<script src="../clash.js"></script>
+</head><body>
+<pre id="test-out">starting…</pre>
+<script>
+/* Bus-clash verification: part A exercises the pure fleet simulation
+   (TCRSClash.analyze) against hand-built days; part B drives the real app
+   with a Troop Lift sheet and checks the live "Bus clashes" tab. */
+(async function () {
+  var out = [], failures = 0;
+  function ok(name, cond, extra) {
+    out.push((cond ? 'PASS ' : 'FAIL ') + name + (cond ? '' : '  [' + (extra === undefined ? '' : extra) + ']'));
+    if (!cond) failures++;
+  }
+  function log() { document.getElementById('test-out').textContent = out.join('\n'); }
+  function txt(el) { return el ? el.textContent : ''; }
+  var C = window.TCRSClash, A;
+
+  function mk(date, time, from, to, qty) {
+    return { id: 'x' + Math.random(), kind: 'bus', date: date, timeStart: time,
+      from: from, to: to, qty: qty, activity: 'TEST', coys: ['4TH'] };
+  }
+  function sev(flags) { return flags.map(function (f) { return f.severity; }).join(','); }
+  var D = '2026-11-23';
+
+  /* ---------- part A: the simulation ---------- */
+  try {
+    ok('module loaded', !!C && typeof C.analyze === 'function');
+
+    var r = C.analyze([mk(D, '0700', 'MTL', 'RHC', 4), mk(D, '0730', 'RHC', 'MTL', 4)]);
+    ok('back-to-back shuttle with a 30-min gap is clean',
+      r.flags.length === 0 && r.checked === 2, JSON.stringify(r.flags));
+
+    r = C.analyze([mk(D, '0800', 'MTL', 'RHC', 4), mk(D, '0820', 'MTL', 'RHC', 4)]);
+    ok('two full-fleet MTL→RHC 20 min apart is a clash (buses back 0830)',
+      sev(r.flags) === 'red', JSON.stringify(r.flags));
+
+    r = C.analyze([mk(D, '0800', 'MTL', 'RHC', 4), mk(D, '0828', 'MTL', 'RHC', 4)]);
+    ok('2 min short is orange (drive-fast grace)',
+      sev(r.flags) === 'orange', JSON.stringify(r.flags));
+
+    r = C.analyze([mk(D, '0800', 'MTL', 'RHC', 4), mk(D, '0835', 'MTL', 'RHC', 4)]);
+    ok('35 min apart is clean', r.flags.length === 0, JSON.stringify(r.flags));
+
+    r = C.analyze([mk(D, '0800', 'MTL', 'RHC', 5)]);
+    ok('asking for 5 buses is a clash', sev(r.flags) === 'red' && /5 buses/.test(r.flags[0].msg),
+      JSON.stringify(r.flags));
+
+    r = C.analyze([mk(D, '0645', 'MTL', 'RHC', 4)]);
+    ok('pre-0700 start is flagged for permission', sev(r.flags) === 'perm', JSON.stringify(r.flags));
+
+    r = C.analyze([mk(D, '0800', 'MTL', 'BIC RANGE', 4)]);
+    ok('unknown route is skipped and counted', r.flags.length === 0 && r.unchecked === 1,
+      'unchecked=' + r.unchecked);
+
+    r = C.analyze([
+      mk(D, '0800', 'RHC', 'hg rangle', 1),
+      mk(D, '0900', 'RHC', 'FC SITE  6', 1),
+      mk(D, '1000', 'RHC', '100M RANGE 2', 1)]);
+    ok('location typos and variants normalise into the table',
+      r.unchecked === 0 && r.flags.length === 0, 'unchecked=' + r.unchecked);
+
+    r = C.analyze([mk(D, '0700', 'S1', 'RHC', 4)]);
+    ok('first trip of the day may start anywhere', r.flags.length === 0, JSON.stringify(r.flags));
+
+    r = C.analyze([mk(D, '0700', 'MTL', 'RHC', 4), mk(D, '0700', 'S1', 'RHC', 1)]);
+    ok('simultaneous trips needing 5 buses is a clash', sev(r.flags) === 'red', JSON.stringify(r.flags));
+
+    r = C.analyze([mk(D, '0800', 'MTL', 'RHC', 4), mk(D, '0810', 'RHC', '100M RANGE', 4)]);
+    ok('bus already at the origin but arriving 5 min late is orange',
+      sev(r.flags) === 'orange', JSON.stringify(r.flags));
+
+    r = C.analyze([mk(D, '0800', 'MTL', 'RHC', 4), mk(D, '0815', 'RHC', '100M RANGE', 4)]);
+    ok('bus at the origin right on time is clean', r.flags.length === 0, JSON.stringify(r.flags));
+  } catch (e) {
+    failures++;
+    out.push('CRASH(A) ' + (e && e.stack || e));
+  }
+
+  /* ---------- part B: the live tab ---------- */
+  try {
+    var html = await fetch('../index.html').then(function (r0) { return r0.text(); });
+    var doc = new DOMParser().parseFromString(html, 'text/html');
+    document.body.appendChild(doc.querySelector('header'));
+    document.body.appendChild(doc.querySelector('main'));
+    document.body.appendChild(doc.querySelector('.toast'));
+
+    window.__TCRS_TEST_MODE = true;
+    eval(await fetch('../app.js').then(function (r0) { return r0.text(); }));
+    eval(await fetch('../sheet.js').then(function (r0) { return r0.text(); }));
+    A = window.__tcrs;
+    localStorage.clear();
+
+    var iw = new ExcelJS.Workbook();
+    var ws = iw.addWorksheet('NOVEMBER');
+    ws.getRow(1).values = [, 'Resource', , , 'Execution Time', , , , 'Location', , 'POC Details', , ,];
+    ws.getRow(2).values = [, 'Type of Veh', 'Qty', 'Required TO', 'Start', , 'End', , 'Reporting', 'Destination', 'Conducting Officer', 'Contact No.', 'Unit', 'Remarks'];
+    ws.getRow(3).values = ['SCH 4 - 4TH COY - RANGE DETAIL', 'LUV', 1, 1, '23/11/26', '08:00', '23/11/26', '09:00', 'RHC', 'HG RANGE', '3WO TEST', '84980951', 'SCH 4', ''];
+
+    var tw = new ExcelJS.Workbook();
+    var tws = tw.addWorksheet('NOVEMBER TL');
+    var lines = [
+      'NOVEMBER TL',
+      '23/11',
+      '0645 MTL - RHC 1 BUSES (4TH EARLY MOVE)',
+      '0800 MTL - RHC 4 BUSES (4TH FIRST TRIP)',
+      '0820 MTL - RHC 4 BUSES (4TH SECOND TRIP)',
+      '0900 MTL - BIC RANGE 4 BUSES (4TH BIC TRIP)'
+    ];
+    lines.forEach(function (t, i) { tws.getRow(3 + i).getCell(1).value = t; });
+
+    async function toFile(wb, name) { return new File([await wb.xlsx.writeBuffer()], name); }
+    await A.handleFile(await toFile(iw, 'icrf.xlsx'), 'icrf');
+    await A.handleFile(await toFile(tw, 'troop lift.xlsx'), 'tl');
+    ok('model built from workbooks', !!A.state.model);
+
+    A.setTab('grid');
+    A.setSrc('clash');
+    ok('clash tab opens', document.getElementById('btn-src-clash').classList.contains('on') &&
+      document.getElementById('clash-container').style.display === '');
+    ok('tab button carries the red+tight count',
+      txt(document.getElementById('btn-src-clash')).indexOf('· 1') > -1,
+      txt(document.getElementById('btn-src-clash')));
+    ok('red clash listed for the 0820 trip',
+      document.querySelectorAll('#clash-container .clash-item.sev-red').length === 1 &&
+      /0820/.test(txt(document.querySelector('#clash-container .clash-item.sev-red'))),
+      txt(document.querySelector('#clash-container .clash-item.sev-red')));
+    ok('pre-0700 trip flagged for permission',
+      document.querySelectorAll('#clash-container .clash-item.sev-perm').length === 1);
+    ok('unknown route counted as unchecked',
+      /not checked/.test(txt(document.querySelector('#clash-container .clash-head'))),
+      txt(document.querySelector('#clash-container .clash-head')));
+    ok('date heading rendered', /MON 23\/11\/26/.test(txt(document.querySelector('#clash-container .clash-date'))),
+      txt(document.querySelector('#clash-container .clash-date')));
+
+    /* editing the TL text re-checks live: push the second trip past 0835 */
+    var t = A.tlText().replace('0820 MTL - RHC 4 BUSES', '0850 MTL - RHC 4 BUSES');
+    A.applyTLText(t);
+    ok('fixing the time clears the clash live',
+      document.querySelectorAll('#clash-container .clash-item.sev-red').length === 0 &&
+      txt(document.getElementById('btn-src-clash')).indexOf('·') === -1,
+      txt(document.getElementById('btn-src-clash')));
+
+    localStorage.clear();
+  } catch (e) {
+    failures++;
+    out.push('CRASH(B) ' + (e && e.stack || e));
+  }
+  log();
+  document.title = failures ? 'CLASH FAILED' : 'CLASH OK';
+})();
+</script></body></html>

@@ -160,7 +160,7 @@
     }
     ['schwide', 'onlyS4', 'poc'].forEach(function (k) { if (typeof o[k] === 'boolean') state[k] = o[k]; });
     if (o.view === 'date' || o.view === 'coy') state.view = o.view;
-    if (o.srcTab === 'icrf' || o.srcTab === 'tl') state.srcTab = o.srcTab;
+    if (o.srcTab === 'icrf' || o.srcTab === 'tl' || o.srcTab === 'clash') state.srcTab = o.srcTab;
     if (o.tab === 'schedule' || o.tab === 'grid') state.tab = o.tab;
   }
   function syncControls() {
@@ -222,6 +222,7 @@
   /* -- saving -- */
   function saveStore(optsOnly) {    // debounced — heavy JSON write happens after a pause
     if (!state.model) return;
+    renderClashes();                // the clash tab tracks edits live
     if (!optsOnly) state.touched = true;
     savePending = true;
     clearTimeout(saveTimer);
@@ -817,6 +818,7 @@
       setTab('schedule');
       renderChips();
       renderNotes();
+      renderClashes();
       return;
     }
 
@@ -892,6 +894,7 @@
     setTab(state.tab);
     sync = { kind: '', text: '' };
     updateSavePill();
+    renderClashes();
     if (!saved || !saved._remote || remote.filesDirty || remote.localFilesDirty ||
         remote.revs[monthKey()] === undefined) saveStore(true);
 
@@ -1354,8 +1357,10 @@
     $('sheet-panel').classList.remove('blank');
     $('btn-src-icrf').classList.toggle('on', s === 'icrf');
     $('btn-src-tl').classList.toggle('on', s === 'tl');
+    $('btn-src-clash').classList.toggle('on', s === 'clash');
     $('icrf-container').style.display = s === 'icrf' ? '' : 'none';
     $('tl-container').style.display = s === 'tl' ? '' : 'none';
+    $('clash-container').style.display = s === 'clash' ? '' : 'none';
     $('icrf-foot').style.display = s === 'icrf' ? '' : 'none';
     $('tl-foot').style.display = s === 'tl' ? '' : 'none';
     $('grid-searchwrap').style.display = s === 'icrf' ? '' : 'none';
@@ -1385,6 +1390,7 @@
     } else if (state.srcTab === 'tl') {
       state.tlGrid.rerender();
     }
+    if (state.srcTab === 'clash') renderClashes();
   }
 
   function rerenderSrc(fresh) {      // only the visible grid; the other redraws when shown
@@ -1506,6 +1512,75 @@
       return '<div class="rowmsg"><span class="r">line ' + u.row + '</span><span>“' + esc(u.text) + '”</span></div>';
     });
     renderHistory();
+  }
+
+  /* ------------------------------------------------- bus clash tab -- */
+  /* Live fleet check: renders TCRSClash.analyze() as a tab beside the
+     live sheets. Recomputed on every save so it tracks edits as they
+     happen; nothing is stored — it is always derived from the rows. */
+  function renderClashes() {
+    var btn = $('btn-src-clash'), host = $('clash-container');
+    if (!btn || !host) return;
+    var CL = window.TCRSClash;
+    if (!CL) {                          // module missing — never break the save path
+      btn.textContent = 'Bus clashes';
+      host.innerHTML = '<div class="clash-empty">Clash checker unavailable.</div>';
+      return;
+    }
+    var res = { flags: [], unchecked: 0, checked: 0 };
+    if (state.model) res = CL.analyze(state.entries);
+
+    var reds = 0, orange = 0, perm = 0;
+    res.flags.forEach(function (f) {
+      if (f.severity === 'red') reds++;
+      else if (f.severity === 'orange') orange++;
+      else perm++;
+    });
+    btn.textContent = 'Bus clashes' + (reds + orange ? ' · ' + (reds + orange) : '');
+
+    if (!state.model) {
+      host.innerHTML = '<div class="clash-empty">Load the month’s files to check the buses.</div>';
+      return;
+    }
+    if (!res.flags.length && !res.unchecked) {
+      host.innerHTML = '<div class="clash-empty clean">All ' + res.checked +
+        ' bus trips fit the ' + CL.FLEET + ' buses — no clashes.</div>';
+      return;
+    }
+
+    var head = '<div class="clash-head">' +
+      (reds ? '<b class="sev-red">' + reds + ' clash' + (reds === 1 ? '' : 'es') + '</b>' : '') +
+      (reds && orange ? ' · ' : '') +
+      (orange ? '<b class="sev-orange">' + orange + ' tight</b>' : '') +
+      ((reds || orange) && perm ? ' · ' : '') +
+      (perm ? '<b class="sev-perm">' + perm + ' before 0700</b>' : '') +
+      (res.unchecked ? '<span class="clash-unchecked">' + res.unchecked +
+        ' trip' + (res.unchecked === 1 ? '' : 's') + ' not checked — route not in the timing table</span>' : '') +
+      '</div>';
+
+    if (!res.flags.length) {
+      host.innerHTML = head + '<div class="clash-empty clean">No clashes — but ' + res.unchecked +
+        ' trip' + (res.unchecked === 1 ? '' : 's') + ' could not be checked.</div>';
+      return;
+    }
+
+    var byDay = {};
+    res.flags.forEach(function (f) { (byDay[f.date] = byDay[f.date] || []).push(f); });
+    var html = head;
+    Object.keys(byDay).sort().forEach(function (day) {
+      html += '<div class="clash-day"><div class="clash-date">' + esc(T.dowOf(day) + ' ' + T.fmtDate(day)) + '</div>';
+      byDay[day].forEach(function (f) {
+        html += '<div class="clash-item sev-' + f.severity + '">' +
+          '<span class="clash-badge">' + (f.severity === 'red' ? 'CLASH' : f.severity === 'orange' ? 'TIGHT' : 'PERMISSION') + '</span>' +
+          '<span class="clash-time">' + esc(f.time) + '</span>' +
+          '<span class="clash-route">' + esc(f.route) + '</span>' +
+          '<span class="clash-why">' + esc(f.msg) +
+          (f.activity ? ' <i>· ' + esc(f.activity) + (f.coys && f.coys.length ? ' (' + esc(f.coys.join(', ')) + ')' : '') + '</i>' : '') +
+          '</span></div>';
+      });
+      html += '</div>';
+    });
+    host.innerHTML = html;
   }
 
   /* ------------------------------------------------------- schedule UI -- */
@@ -1928,6 +2003,7 @@
     // live-sheet sub-tabs
     $('btn-src-icrf').addEventListener('click', function () { setSrc('icrf'); saveStore(true); });
     $('btn-src-tl').addEventListener('click', function () { setSrc('tl'); saveStore(true); });
+    $('btn-src-clash').addEventListener('click', function () { setSrc('clash'); saveStore(true); });
 
     // schedule view
     $('view-date').addEventListener('click', function () { state.view = 'date'; syncControls(); refreshDerived(); saveStore(true); });
