@@ -96,6 +96,19 @@
       C.tripMinutes('HG RANGE', '100M RANGE') + '/' + C.tripMinutes('CCP 6', '100M RANGE'));
     ok('RHC-S1 hand timing kept', C.tripMinutes('RHC', 'S1') === 15, C.tripMinutes('RHC', 'S1'));
 
+    r = C.analyze([mk(D, '2359', '100M RANGE', 'MTL', 4)]);
+    ok('2359 trip is late-night activation — skipped, not flagged',
+      r.flags.length === 0 && r.activation === 1 && r.checked === 0,
+      JSON.stringify(r.flags) + ' act=' + r.activation);
+
+    r = C.analyze([mk(D, 'TBC', 'MTL', 'RHC', 4)]);
+    ok('TBC-time trip is activation too', r.flags.length === 0 && r.activation === 1 && r.unchecked === 0,
+      JSON.stringify(r.flags) + ' act=' + r.activation);
+
+    r = C.analyze([mk(D, '2300', 'MTL', 'RHC', 4)]);
+    ok('2300 trip is still checked', r.checked === 1 && r.flags.length === 0 && r.activation === 0,
+      JSON.stringify(r.flags));
+
     r = C.analyze([
       mk(D, '0700', 'RHC', 'MTL', 1),
       mk(D, '0710', 'RHC', 'MTL', 1),
@@ -157,7 +170,8 @@
       '0800 MTL - RHC 4 BUSES (4TH FIRST TRIP)',
       '0820 MTL - RHC 4 BUSES (4TH SECOND TRIP)',
       '0900 MTL - BIC RANGE 4 BUSES (4TH BIC TRIP)',
-      '0930 S1 - 163SQN 1 BUSES (4TH S1 TRIP)'
+      '0930 S1 - 163SQN 1 BUSES (4TH S1 TRIP)',
+      '2359 100M RANGE - MTL 4 BUSES (4TH NIGHT ACTIVATION)'
     ];
     lines.forEach(function (t, i) { tws.getRow(3 + i).getCell(1).value = t; });
 
@@ -184,6 +198,9 @@
       document.querySelectorAll('#clash-container .clash-item.sev-perm').length === 1);
     ok('unknown route counted as unchecked',
       /not fully checked/.test(txt(document.querySelector('#clash-container .clash-head'))),
+      txt(document.querySelector('#clash-container .clash-head')));
+    ok('2359 trip shown as activation, not a clash',
+      /late-night activation/.test(txt(document.querySelector('#clash-container .clash-head'))),
       txt(document.querySelector('#clash-container .clash-head')));
     ok('date heading rendered', /MON 23\/11\/26/.test(txt(document.querySelector('#clash-container .clash-date'))),
       txt(document.querySelector('#clash-container .clash-date')));

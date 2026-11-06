@@ -1527,7 +1527,7 @@
       host.innerHTML = '<div class="clash-empty">Clash checker unavailable.</div>';
       return;
     }
-    var res = { flags: [], unchecked: 0, checked: 0 };
+    var res = { flags: [], unchecked: 0, checked: 0, activation: 0 };
     if (state.model) res = CL.analyze(state.entries);
 
     var reds = 0, orange = 0, perm = 0;
@@ -1542,11 +1542,17 @@
       host.innerHTML = '<div class="clash-empty">Load the month’s files to check the buses.</div>';
       return;
     }
-    if (!res.flags.length && !res.unchecked) {
+    if (!res.flags.length && !res.unchecked && !res.activation) {
       host.innerHTML = '<div class="clash-empty clean">All ' + res.checked +
         ' bus trips fit the ' + CL.FLEET + ' buses — no clashes.</div>';
       return;
     }
+
+    var notes = '';
+    if (res.activation) notes += res.activation + ' late-night activation trip' +
+      (res.activation === 1 ? '' : 's') + ' (2359/TBC) — buses activated, not checked';
+    if (res.unchecked) notes += (notes ? ' · ' : '') + res.unchecked +
+      ' trip' + (res.unchecked === 1 ? '' : 's') + ' not fully checked — a needed route is not in the timing table';
 
     var head = '<div class="clash-head">' +
       (reds ? '<b class="sev-red">' + reds + ' clash' + (reds === 1 ? '' : 'es') + '</b>' : '') +
@@ -1554,13 +1560,13 @@
       (orange ? '<b class="sev-orange">' + orange + ' tight</b>' : '') +
       ((reds || orange) && perm ? ' · ' : '') +
       (perm ? '<b class="sev-perm">' + perm + ' before 0700</b>' : '') +
-      (res.unchecked ? '<span class="clash-unchecked">' + res.unchecked +
-        ' trip' + (res.unchecked === 1 ? '' : 's') + ' not fully checked — a needed route is not in the timing table</span>' : '') +
+      (notes ? '<span class="clash-unchecked">' + notes + '</span>' : '') +
       '</div>';
 
     if (!res.flags.length) {
-      host.innerHTML = head + '<div class="clash-empty clean">No clashes — but ' + res.unchecked +
-        ' trip' + (res.unchecked === 1 ? '' : 's') + ' could not be checked.</div>';
+      var blind = res.unchecked + res.activation;
+      host.innerHTML = head + '<div class="clash-empty clean">No clashes — but ' + blind +
+        ' trip' + (blind === 1 ? '' : 's') + ' could not be checked.</div>';
       return;
     }
 

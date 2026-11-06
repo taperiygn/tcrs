@@ -9,6 +9,8 @@
    Trips whose route is not in the duration table (S1-163SQN, AMMO
    DUMP-RHC) are skipped but counted, as are trips that would need a
    repositioning leg with no timing — the blind spot stays visible.
+   Late-night activation trips (2359 or TBC start) are also excluded:
+   the buses are activated for a TBC spell, not running the schedule.
 
    Pure module: no DOM. The live sheet tab renders what analyze() returns. */
 (function () {
@@ -283,11 +285,16 @@
     var grace = typeof opts.grace === 'number' ? opts.grace : GRACE_MIN;
 
     var byDay = {};
-    var unchecked = 0, checked = 0;
+    var unchecked = 0, checked = 0, activation = 0;
     (entries || []).forEach(function (e) {
       if (!e || e.kind !== 'bus') return;
       var day = e.date;
       if (!day || typeof day !== 'string' || day.length !== 10) { unchecked++; return; }
+      /* late-night activation: buses taken at 2359 (or an untimed TBC
+         movement) are activated for a TBC spell — not part of the
+         day's scheduled shuttle run, so leave them out entirely */
+      var ts = String(e.timeStart || '').trim();
+      if (ts === 'TBC' || ts === '2359') { activation++; return; }
       (byDay[day] = byDay[day] || []).push(e);
     });
 
@@ -394,7 +401,7 @@
     });
 
     flags.sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : (toMin(a.time) || 0) - (toMin(b.time) || 0); });
-    return { flags: flags, unchecked: unchecked, checked: checked };
+    return { flags: flags, unchecked: unchecked, checked: checked, activation: activation };
   }
 
   /* send buses on a trip: they end at the destination, free on arrival */
