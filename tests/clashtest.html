@@ -63,7 +63,7 @@
     r = C.analyze([mk(D, '0645', 'MTL', 'RHC', 4)]);
     ok('pre-0700 start is flagged for permission', sev(r.flags) === 'perm', JSON.stringify(r.flags));
 
-    r = C.analyze([mk(D, '0800', 'MTL', 'BIC RANGE', 4)]);
+    r = C.analyze([mk(D, '0800', 'S1', '163SQN', 4)]);
     ok('unknown route is skipped and counted', r.flags.length === 0 && r.unchecked === 1,
       'unchecked=' + r.unchecked);
 
@@ -73,6 +73,43 @@
       mk(D, '1000', 'RHC', '100M RANGE 2', 1)]);
     ok('location typos and variants normalise into the table',
       r.unchecked === 0 && r.flags.length === 0, 'unchecked=' + r.unchecked);
+
+    r = C.analyze([mk(D, '0800', 'RHC', 'HG RANGE', 2), mk(D, '0900', '100M RANGE', 'RHC', 2)]);
+    ok('bus dropped at HG RANGE is positioned at 100M RANGE (aliases)',
+      r.unchecked === 0 && r.flags.length === 0,
+      JSON.stringify(r.flags) + ' unchecked=' + r.unchecked);
+
+    r = C.analyze([mk(D, '0800', 'MTL', 'BIC RANGE', 4)]);
+    ok('MTL-BIC RANGE now checked from the matrix (15 min)',
+      r.unchecked === 0 && r.flags.length === 0 && r.checked === 1, JSON.stringify(r.flags));
+
+    r = C.analyze([mk(D, '0800', 'RHC', 'CCP 3', 1)]);
+    ok('CCP 3 resolves to FC SITE 2 (20 min from RHC)',
+      r.unchecked === 0 && r.flags.length === 0, 'unchecked=' + r.unchecked);
+
+    ok('RHC-FC SITE 6 is 20 min per the matrix', C.tripMinutes('RHC', 'FC SITE 6') === 20,
+      C.tripMinutes('RHC', 'FC SITE 6'));
+    ok('MTL-FC SITE 1 is 5 min', C.tripMinutes('MTL', 'FC SITE 1') === 5,
+      C.tripMinutes('MTL', 'FC SITE 1'));
+    ok('same place under two names is a 0-min trip',
+      C.tripMinutes('HG RANGE', '100M RANGE') === 0 && C.tripMinutes('CCP 6', '100M RANGE') === 0,
+      C.tripMinutes('HG RANGE', '100M RANGE') + '/' + C.tripMinutes('CCP 6', '100M RANGE'));
+    ok('RHC-S1 hand timing kept', C.tripMinutes('RHC', 'S1') === 15, C.tripMinutes('RHC', 'S1'));
+
+    r = C.analyze([
+      mk(D, '0700', 'RHC', 'MTL', 1),
+      mk(D, '0710', 'RHC', 'MTL', 1),
+      mk(D, '0720', 'RHC', 'MTL', 1),
+      mk(D, '0730', 'RHC', 'MTL', 1),
+      mk(D, '0900', 'S1', 'RHC', 1)]);
+    ok('trip needing an unknown deadhead is skipped and counted, not red',
+      r.flags.length === 0 && r.unchecked === 1 && r.checked === 5,
+      JSON.stringify(r.flags) + ' unchecked=' + r.unchecked + ' checked=' + r.checked);
+
+    r = C.analyze([mk(D, '0800', 'RHC', 'S1', 1), mk(D, '0900', 'S1', 'RHC', 1)]);
+    ok('bus dropped at S1 by a checked trip is positioned there',
+      r.flags.length === 0 && r.unchecked === 0 && r.checked === 2,
+      JSON.stringify(r.flags) + ' unchecked=' + r.unchecked);
 
     r = C.analyze([mk(D, '0700', 'S1', 'RHC', 4)]);
     ok('first trip of the day may start anywhere', r.flags.length === 0, JSON.stringify(r.flags));
@@ -119,7 +156,8 @@
       '0645 MTL - RHC 1 BUSES (4TH EARLY MOVE)',
       '0800 MTL - RHC 4 BUSES (4TH FIRST TRIP)',
       '0820 MTL - RHC 4 BUSES (4TH SECOND TRIP)',
-      '0900 MTL - BIC RANGE 4 BUSES (4TH BIC TRIP)'
+      '0900 MTL - BIC RANGE 4 BUSES (4TH BIC TRIP)',
+      '0930 S1 - 163SQN 1 BUSES (4TH S1 TRIP)'
     ];
     lines.forEach(function (t, i) { tws.getRow(3 + i).getCell(1).value = t; });
 
@@ -145,13 +183,13 @@
     ok('pre-0700 trip flagged for permission',
       document.querySelectorAll('#clash-container .clash-item.sev-perm').length === 1);
     ok('unknown route counted as unchecked',
-      /not checked/.test(txt(document.querySelector('#clash-container .clash-head'))),
+      /not fully checked/.test(txt(document.querySelector('#clash-container .clash-head'))),
       txt(document.querySelector('#clash-container .clash-head')));
     ok('date heading rendered', /MON 23\/11\/26/.test(txt(document.querySelector('#clash-container .clash-date'))),
       txt(document.querySelector('#clash-container .clash-date')));
 
     /* editing the TL text re-checks live: push the second trip past 0835 */
-    var t = A.tlText().replace('0820 MTL - RHC 4 BUSES', '0850 MTL - RHC 4 BUSES');
+    var t = A.tlText().replace('0820 MTL - RHC 4 BUSES', '0830 MTL - RHC 4 BUSES');
     A.applyTLText(t);
     ok('fixing the time clears the clash live',
       document.querySelectorAll('#clash-container .clash-item.sev-red').length === 0 &&

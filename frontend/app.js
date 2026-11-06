@@ -1555,7 +1555,7 @@
       ((reds || orange) && perm ? ' · ' : '') +
       (perm ? '<b class="sev-perm">' + perm + ' before 0700</b>' : '') +
       (res.unchecked ? '<span class="clash-unchecked">' + res.unchecked +
-        ' trip' + (res.unchecked === 1 ? '' : 's') + ' not checked — route not in the timing table</span>' : '') +
+        ' trip' + (res.unchecked === 1 ? '' : 's') + ' not fully checked — a needed route is not in the timing table</span>' : '') +
       '</div>';
 
     if (!res.flags.length) {
