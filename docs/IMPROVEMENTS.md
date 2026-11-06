@@ -57,6 +57,13 @@ User picked two new features: **3 · Month picker** and **5 · Edit history**. E
 - Suites: clashtest updated to the preview-aware tab (38), new plantest (29) covering respace semantics + full drag/save/submit/discard flow; all four suites green (102 total).
 - Real-data check (busiest day 23/11, 25 timed trips): natural order moves 7 (the 0630 full-fleet trip genuinely pushes the 0700 to 0715); dragging the last trip to the front cascades minimal fixes that stabilize by midday.
 
+**2026-11-06 — Planner scroll + per-day auto adjust DONE** (commit 796b861, live on Pages; user refinement):
+- All days with bus trips render in one continuous scroll (day picker removed); auto-spacing stays strictly within each day.
+- Each date heading carries a small **auto adjust** toggle, **default off**: off, dragging purely reorders and every time stays exactly as entered; on, the day re-spaces immediately and after each drag (minimal fix as before).
+- Working state is per day (`planOrder/planTimes/planAuto/planDirty` maps); drafts store `{order, times, auto}` per day. Save draft stores every changed day; Submit applies everything shown and clears all drafts; Discard resets all days. Tab button counts projected clashes across all days; each day head shows its own counts, activation total and draft state.
+- Suites: plantest 32 (toggle semantics: auto-off drag keeps times, auto-on pushes), clashtest 39; all four suites green (106 total).
+- Real-data check (all November, auto on everywhere): 20 days, 306 timed trips — 72 would move, 63 skipped; confirms the per-day opt-in default.
+
 ---
 
 ## Tier 0 — Hazards to fix first (bugs / traps that bite you today)
