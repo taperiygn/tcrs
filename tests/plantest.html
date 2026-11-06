@@ -124,6 +124,7 @@
     ok('model built from workbooks', !!A.state.model);
     A.setTab('grid');
     A.setSrc('plan');
+    var DAY = '2026-11-23';
 
     ok('planner lists every trip of the day, clean ones included',
       document.querySelectorAll('#planner-container .plan-row').length === 5,
@@ -131,6 +132,7 @@
     ok('unknown route shows as SKIP, 2359 as locked ACTIVATION',
       document.querySelectorAll('#planner-container .clash-item.sev-skip').length === 1 &&
       document.querySelectorAll('#planner-container .clash-item.sev-activation.plan-locked').length === 1);
+    ok('auto adjust defaults off', !document.querySelector('#planner-container .plan-auto input').checked);
     ok('no draft yet — Save/Submit/Discard disabled',
       document.getElementById('plan-save').disabled &&
       document.getElementById('plan-submit').disabled &&
@@ -139,24 +141,46 @@
     function rowId(i) {
       return document.querySelectorAll('#planner-container .plan-row')[i].getAttribute('data-id');
     }
-    function rowTime(i) { return A.state.planTimes[rowId(i)]; }
+    function rowTime(i) {             // the time shown: working plan or entered
+      var id = rowId(i);
+      var pt = A.state.planTimes[DAY] || {};
+      if (pt[id]) return pt[id];
+      var e = A.state.entries.filter(function (x) { return x.id === id; })[0];
+      return e ? e.timeStart : null;
+    }
+    function actOf(i) {
+      var id = rowId(i);
+      var e = A.state.entries.filter(function (x) { return x.id === id; })[0];
+      return e ? e.activity : '';
+    }
 
-    /* drag the 0820 trip above the 0800 one */
-    A.planMove(rowId(1), rowId(0));
-    ok('dragged trip moved to the top and adopted the 0700 slot',
-      rowTime(0) === '0700' && rowTime(1) === '0800' &&
-      document.querySelector('#planner-container .plan-row').classList.contains('plan-moved'),
-      rowTime(0) + ',' + rowTime(1));
-    ok('drag enables Save/Submit/Discard',
-      !document.getElementById('plan-save').disabled && !document.getElementById('plan-submit').disabled);
+    /* drag with auto adjust OFF: pure reorder, times untouched */
+    A.planMove(DAY, rowId(1), rowId(0));
+    ok('auto off — drag reorders without touching any time',
+      actOf(0) === 'SECOND' && rowTime(0) === '0820' && rowTime(1) === '0800' &&
+      document.querySelectorAll('#planner-container .plan-row.plan-moved').length === 0,
+      actOf(0) + ' ' + rowTime(0) + ',' + rowTime(1));
+    ok('drag marks the day dirty and enables the buttons',
+      A.state.planDirty[DAY] && !document.getElementById('plan-save').disabled &&
+      !document.getElementById('plan-submit').disabled);
+
+    /* switch auto adjust on: the day re-spaces from the current order */
+    var autoBox = document.querySelector('#planner-container .plan-auto input');
+    autoBox.checked = true;
+    autoBox.dispatchEvent(new Event('change'));
+    ok('auto on — out-of-order trips are pushed to when their buses can be there',
+      rowTime(0) === '0820' && rowTime(1) === '0850' && rowTime(2) === '0905' &&
+      document.querySelectorAll('#planner-container .plan-row.plan-moved').length === 2,
+      rowTime(0) + ',' + rowTime(1) + ',' + rowTime(2) + ' moved=' +
+      document.querySelectorAll('#planner-container .plan-row.plan-moved').length);
 
     A.planSaveDraft();
-    ok('Save draft stores order+times with the month',
-      !!A.state.busPlan['2026-11-23'] && A.state.busPlan['2026-11-23'].order.length === 5 &&
-      A.state.busPlan['2026-11-23'].times[rowId(0)] === '0700',
+    ok('Save draft stores order+times+auto with the month',
+      !!A.state.busPlan[DAY] && A.state.busPlan[DAY].order.length === 5 &&
+      A.state.busPlan[DAY].auto === true && A.state.busPlan[DAY].times[rowId(1)] === '0850',
       JSON.stringify(A.state.busPlan));
     ok('draft silences the dirty flag and buttons flip',
-      !A.state.planDirty && document.getElementById('plan-save').disabled &&
+      !A.state.planDirty[DAY] && document.getElementById('plan-save').disabled &&
       !document.getElementById('plan-submit').disabled);
     A.flushSave();
     ok('draft save lands in the history trail',
@@ -166,38 +190,45 @@
       A.tlText().indexOf('0820 MTL - RHC 4 BUSES') > -1);
 
     /* reload simulation: rebuild the planner state from the draft */
-    A.state.planOrder = []; A.state.planTimes = {}; A.state.planDay = null;
+    A.state.planOrder = {}; A.state.planTimes = {}; A.state.planAuto = {}; A.state.planDirty = {};
     A.renderPlanner();
-    ok('draft survives a reload and restores the dragged order',
-      rowTime(0) === '0700' && rowTime(1) === '0800', rowTime(0) + ',' + rowTime(1));
+    ok('draft survives a reload and restores order, times and the toggle',
+      rowTime(1) === '0850' &&
+      document.querySelector('#planner-container .plan-auto input').checked,
+      rowTime(1));
 
     /* submit writes the plan into the schedule */
     A.planSubmit();
+    var first = A.state.entries.filter(function (e) { return e.activity === 'FIRST'; })[0];
     var second = A.state.entries.filter(function (e) { return e.activity === 'SECOND'; })[0];
-    ok('Submit retimed the dragged trip to 0700',
-      !!second && second.timeStart === '0700' && second.edited,
+    ok('Submit retimed the pushed trip to 0850',
+      !!first && first.timeStart === '0850' && first.edited, first && first.timeStart);
+    ok('the kept trip kept its entered time', !!second && second.timeStart === '0820',
       second && second.timeStart);
-    ok('Submit rewrote the raw text of the trip', /^0700 MTL - RHC/.test(second.rawText || ''),
-      second.rawText);
+    ok('Submit rewrote the raw text of the trip', /^0850 MTL - RHC/.test(first.rawText || ''),
+      first.rawText);
     ok('Submit rewrote the Troop-lift line text',
-      A.tlText().indexOf('0700 MTL - RHC 4 BUSES (4TH SECOND)') > -1, A.tlText());
-    ok('other trips kept their times', (A.state.entries.filter(function (e) {
-      return e.activity === 'FIRST';
-    })[0] || {}).timeStart === '0800');
-    ok('Submit cleared the draft and the history says so',
-      !A.state.busPlan['2026-11-23'] &&
-      /Bus plan submitted/.test((A.state.history[0] || {}).text || ''),
+      A.tlText().indexOf('0850 MTL - RHC 4 BUSES (4TH FIRST)') > -1, A.tlText());
+    ok('Submit cleared drafts, dirty flags and the toggles',
+      !A.state.busPlan[DAY] && !A.state.planDirty[DAY] &&
+      !document.querySelector('#planner-container .plan-auto input').checked);
+    ok('history says so',
+      /Bus plan submitted — 2 trips retimed/.test((A.state.history[0] || {}).text || ''),
       JSON.stringify((A.state.history[0] || {}).text || ''));
 
     /* discard throws away working changes and any saved draft */
-    A.planMove(rowId(1), rowId(0));
+    autoBox = document.querySelector('#planner-container .plan-auto input');
+    autoBox.checked = true;
+    autoBox.dispatchEvent(new Event('change'));
+    A.planMove(DAY, rowId(1), rowId(0));
     A.planSaveDraft();
-    A.planMove(rowId(1), rowId(0));
-    ok('second drag re-marks the plan dirty', A.state.planDirty);
+    A.planMove(DAY, rowId(1), rowId(0));
+    ok('second drag re-marks the day dirty', !!A.state.planDirty[DAY]);
     A.planDiscard();
-    ok('Discard clears the draft and restores the schedule order',
-      !A.state.busPlan['2026-11-23'] && !A.state.planDirty &&
-      rowTime(0) === '0700' && rowTime(1) === '0800',
+    ok('Discard clears drafts, toggles and working changes',
+      !A.state.busPlan[DAY] && !A.state.planDirty[DAY] &&
+      !document.querySelector('#planner-container .plan-auto input').checked &&
+      rowTime(0) === '0820' && rowTime(1) === '0850',
       rowTime(0) + ',' + rowTime(1) + ' draft=' + JSON.stringify(A.state.busPlan));
 
     localStorage.clear();

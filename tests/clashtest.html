@@ -187,13 +187,22 @@
     ok('planner tab scrolls vertically',
       getComputedStyle(document.getElementById('planner-container')).overflowY === 'auto',
       getComputedStyle(document.getElementById('planner-container')).overflowY);
-    ok('tab button shows no clash count — the preview auto-spaces',
-      txt(document.getElementById('btn-src-planner')).indexOf('·') === -1,
+    ok('tab button carries the red+tight count of the entered times',
+      txt(document.getElementById('btn-src-planner')).indexOf('· 1') > -1,
       txt(document.getElementById('btn-src-planner')));
     ok('every trip of the day is listed, clean ones included',
       document.querySelectorAll('#planner-container .plan-row').length === 6,
       'rows=' + document.querySelectorAll('#planner-container .plan-row').length);
-    ok('the clashing 0820 trip is auto-spaced to 0830 in the preview',
+    ok('auto adjust defaults off — times shown exactly as entered',
+      document.querySelector('#planner-container .plan-auto input').checked === false &&
+      document.querySelectorAll('#planner-container .plan-row.plan-moved').length === 0);
+    ok('day head rendered for the planned day',
+      /MON 23\/11\/26/.test(txt(document.querySelector('#planner-container .plan-dayhead .clash-date'))),
+      txt(document.querySelector('#planner-container .plan-dayhead .clash-date')));
+    var autoBox = document.querySelector('#planner-container .plan-auto input');
+    autoBox.checked = true;
+    autoBox.dispatchEvent(new Event('change'));
+    ok('with auto adjust on, the clashing 0820 trip is auto-spaced to 0830',
       document.querySelectorAll('#planner-container .plan-row.plan-moved').length === 1 &&
       /0830/.test(txt(document.querySelector('#planner-container .plan-row.plan-moved'))) &&
       /0820/.test(txt(document.querySelector('#planner-container .plan-row.plan-moved'))),
@@ -205,9 +214,6 @@
     ok('2359 trip shown as locked activation row',
       document.querySelectorAll('#planner-container .clash-item.sev-activation').length === 1 &&
       document.querySelector('#planner-container .clash-item.sev-activation').classList.contains('plan-locked'));
-    ok('day picker offers the planned day', /MON 23\/11\/26/.test(txt(document.getElementById('plan-day'))),
-      txt(document.getElementById('plan-day')));
-
     /* editing the TL text re-checks live: push the second trip past 0835 */
     var t = A.tlText().replace('0820 MTL - RHC 4 BUSES', '0830 MTL - RHC 4 BUSES');
     A.applyTLText(t);

@@ -19,12 +19,12 @@
     tlLines: [],            // Troop-lift sheet as live lines ({row,kind,date,text,status,entryId})
     skipped: [],            // ICRF rows behind the template (`s`-prefixed ids in the grid)
     history: [],            // recent-changes trail ({at,src,text}), newest first — saved with the edits
-    busPlan: {},            // saved planner drafts: { day: {order:[entryId], times:{id:'HHMM'}} } — not applied until Submit
-    planDay: null,          // day shown in the planner tab
-    planOrder: [],          // working trip order for planDay (in memory)
-    planTimes: {},          // working respaced times for planDay ({id:'HHMM'}), entry.timeStart when absent
+    busPlan: {},            // saved planner drafts: { day: {order:[entryId], times:{id:'HHMM'}, auto} } — not applied until Submit
+    planOrder: {},          // working trip order per day ({day:[entryId]}) — a day left untouched has none (schedule order)
+    planTimes: {},          // working respaced times per day ({day:{id:'HHMM'}}) — only kept while auto adjust is on
+    planAuto: {},           // days with auto adjust switched on (default off: dragging only reorders)
+    planDirty: {},          // days with unsaved working changes
     planDragId: null,       // trip just dragged — adopts its new slot on the next respace
-    planDirty: false,       // working plan differs from the saved draft
     tab: 'schedule',
     srcTab: 'icrf',
     view: 'date',           // schedule grouping
@@ -403,8 +403,8 @@
     state.skipped = JSON.parse(JSON.stringify(state.pristine.skipped));
     normalizeTLLines();
     state.busPlan = {};
-    state.planDay = null; state.planOrder = []; state.planTimes = {};
-    state.planDragId = null; state.planDirty = false;
+    state.planOrder = {}; state.planTimes = {}; state.planAuto = {};
+    state.planDirty = {}; state.planDragId = null;
     changed();
     rerenderSrc(true);
     state.touched = false;
@@ -820,8 +820,8 @@
     if (!model) {
       state.model = null; state.entries = []; state.restoredAt = null; state.touched = false;
       histLast = {}; histNote = null;
-      state.busPlan = {}; state.planDay = null; state.planOrder = [];
-      state.planTimes = {}; state.planDragId = null; state.planDirty = false;
+      state.busPlan = {}; state.planOrder = {}; state.planTimes = {};
+      state.planAuto = {}; state.planDirty = {}; state.planDragId = null;
       $('sync-pill').hidden = true;
       state.tlLines = []; state.skipped = [];
       $('results').hidden = true;
@@ -868,8 +868,8 @@
     }
     state.history = (saved && Array.isArray(saved.history)) ? saved.history : [];
     state.busPlan = (saved && saved.busPlan && typeof saved.busPlan === 'object' && !Array.isArray(saved.busPlan)) ? saved.busPlan : {};
-    state.planDay = null; state.planOrder = []; state.planTimes = {};
-    state.planDragId = null; state.planDirty = false;
+    state.planOrder = {}; state.planTimes = {}; state.planAuto = {};
+    state.planDirty = {}; state.planDragId = null;
 
     // companies added by manual rows in an earlier session
     state.entries.forEach(function (e) {
@@ -1532,14 +1532,14 @@
   }
 
   /* ------------------------------------------------- bus planner tab -- */
-  /* Drag-to-reorder planner for a day's bus trips — every trip of the
-     day is listed, including the clean ones. Dragging reorders the day;
-     times then auto-space with a minimal fix (entered times are kept
-     unless they would clash). The working plan lives in memory; Save
-     draft stores it with the month (busPlan in the edits payload) and
-     Submit writes the times into the entries and Troop-lift text, so
-     nothing reaches the schedule until Submit. 2359/TBC activation
-     trips are listed but locked. */
+  /* All of the month's bus trips, day by day in one scroll — clean trips
+     included. Dragging reorders a day; a small per-day "auto adjust"
+     toggle (default off) lets the timings re-space after each drag with
+     a minimal fix (entered times kept unless they would clash). The
+     working plan lives in memory; Save draft stores it with the month
+     (busPlan in the edits payload) and Submit writes the times into the
+     entries and Troop-lift text, so nothing reaches the schedule until
+     Submit. 2359/TBC activation trips are listed but locked. */
 
   function planDays() {             // day -> bus entries
     var days = {};
@@ -1557,116 +1557,137 @@
     return ts === '2359' || ts === 'TBC';
   }
 
-  /* make planDay/planOrder/planTimes match the loaded entries */
-  function planEnsure(days, dayList) {
-    if (!state.planDay || dayList.indexOf(state.planDay) === -1) {
-      var dds = Object.keys(state.busPlan || {}).filter(function (d) {
-        return dayList.indexOf(d) !== -1;
-      }).sort();
-      state.planDay = dds.length ? dds[0] : dayList[0];
-      state.planOrder = []; state.planTimes = {}; state.planDirty = false;
-    }
-    var cur = days[state.planDay];
-    var have = {};
-    cur.forEach(function (e) { have[e.id] = true; });
-    state.planOrder = (state.planOrder || []).filter(function (id) { return have[id]; });
-    if (!state.planOrder.length) {
-      var draft = (state.busPlan || {})[state.planDay];
-      if (draft && Array.isArray(draft.order) && draft.order.length) {
-        state.planOrder = draft.order.filter(function (id) { return have[id]; });
-        state.planTimes = Object.assign({}, draft.times || {});
-      } else {
-        state.planTimes = {};
-        var CLm = window.TCRSClash;
-        state.planOrder = cur.slice().sort(function (a, b) {
-          var ta = CLm ? CLm.toMin(a.timeStart) : null;
-          var tb = CLm ? CLm.toMin(b.timeStart) : null;
-          return (ta === null ? 1441 : ta) - (tb === null ? 1441 : tb);
-        }).map(function (e) { return e.id; });
+  /* make the per-day working state match the loaded entries; a day the
+     user never touched and that has no draft stays lazy (schedule order,
+     entered times, auto adjust off) */
+  function planEnsureAll(days) {
+    Object.keys(state.busPlan || {}).forEach(function (d) {
+      if (!days[d]) delete state.busPlan[d];   // drafts for days that lost their trips
+    });
+    Object.keys(days).forEach(function (day) {
+      var cur = days[day];
+      var have = {};
+      cur.forEach(function (e) { have[e.id] = true; });
+      if (!state.planOrder[day]) {
+        var draft = (state.busPlan || {})[day];
+        if (draft && Array.isArray(draft.order) && draft.order.length) {
+          state.planOrder[day] = draft.order.filter(function (id) { return have[id]; });
+          state.planTimes[day] = Object.assign({}, draft.times || {});
+          state.planAuto[day] = !!draft.auto;
+        }
       }
-    }
-    /* slot in entries the order does not know yet (first build fills the
-       whole day; rows added after a draft keep the time order) */
-    cur.forEach(function (e) {
-      if (state.planOrder.indexOf(e.id) !== -1) return;
-      var CLm2 = window.TCRSClash;
-      var t = CLm2 ? CLm2.toMin(state.planTimes[e.id] || e.timeStart) : null;
-      var at = state.planOrder.length;
-      for (var i = 0; i < state.planOrder.length; i++) {
-        var o = findEntry(state.planOrder[i]);
-        if (!o) continue;
-        var ot = CLm2 ? CLm2.toMin(state.planTimes[o.id] || o.timeStart) : null;
-        if ((ot === null ? 1441 : ot) > (t === null ? 1441 : t)) { at = i; break; }
-      }
-      state.planOrder.splice(at, 0, e.id);
+      if (!state.planOrder[day]) return;
+      state.planOrder[day] = state.planOrder[day].filter(function (id) { return have[id]; });
+      /* slot in entries the order does not know yet (rows added after the
+         draft keep the time order) */
+      cur.forEach(function (e) {
+        if (state.planOrder[day].indexOf(e.id) !== -1) return;
+        var CLm2 = window.TCRSClash;
+        var pt = state.planTimes[day] || {};
+        var t = CLm2 ? CLm2.toMin(pt[e.id] || e.timeStart) : null;
+        var at = state.planOrder[day].length;
+        for (var i = 0; i < state.planOrder[day].length; i++) {
+          var o = findEntry(state.planOrder[day][i]);
+          if (!o) continue;
+          var ot = CLm2 ? CLm2.toMin(pt[o.id] || o.timeStart) : null;
+          if ((ot === null ? 1441 : ot) > (t === null ? 1441 : t)) { at = i; break; }
+        }
+        state.planOrder[day].splice(at, 0, e.id);
+      });
     });
   }
 
-  function planTrips() {            // respace input from the working plan
-    return state.planOrder.map(function (id) {
+  /* the day's trip order — materialized from the schedule on first change */
+  function planOrderOf(day, days) {
+    if (state.planOrder[day]) return state.planOrder[day];
+    var CLm = window.TCRSClash;
+    return (days ? days[day] : planDays()[day] || []).slice().sort(function (a, b) {
+      var ta = CLm ? CLm.toMin(a.timeStart) : null;
+      var tb = CLm ? CLm.toMin(b.timeStart) : null;
+      return (ta === null ? 1441 : ta) - (tb === null ? 1441 : tb);
+    }).map(function (e) { return e.id; });
+  }
+
+  function planTrips(day, order) {  // respace input from the day's working plan
+    var pt = state.planTimes[day] || {};
+    return order.map(function (id) {
       var e = findEntry(id);
       if (!e) return { id: id, timeStart: 'TBC', from: '', to: '', qty: null, lock: true };
       var locked = planLocked(e);
       return {
         id: id,
-        timeStart: locked ? e.timeStart : (state.planTimes[id] || e.timeStart),
+        timeStart: locked ? e.timeStart : (pt[id] || e.timeStart),
         from: e.from, to: e.to, qty: e.qty, lock: locked
       };
     });
   }
 
-  function planMove(dragId, targetId) {
-    var from = state.planOrder.indexOf(dragId), to = state.planOrder.indexOf(targetId);
+  function planMove(day, dragId, targetId) {
+    var order = state.planOrder[day] || (state.planOrder[day] = planOrderOf(day));
+    var from = order.indexOf(dragId), to = order.indexOf(targetId);
     if (from < 0 || to < 0 || from === to) return;
-    state.planOrder.splice(to, 0, state.planOrder.splice(from, 1)[0]);
-    state.planDragId = dragId;      // the dragged trip adopts its new slot
-    state.planDirty = true;
+    order.splice(to, 0, order.splice(from, 1)[0]);
+    state.planDragId = dragId;      // the dragged trip adopts its new slot (auto adjust on)
+    state.planDirty[day] = true;
     renderPlanner();
   }
 
   function planSaveDraft() {
-    if (!state.planDay || !state.planOrder.length) return;
+    var touchedDays = Object.keys(state.planDirty || {}).filter(function (d) {
+      return state.planDirty[d];
+    });
+    if (!touchedDays.length) return;
     state.busPlan = state.busPlan || {};
-    state.busPlan[state.planDay] = {
-      order: state.planOrder.slice(),
-      times: Object.assign({}, state.planTimes)
-    };
+    touchedDays.forEach(function (day) {
+      state.busPlan[day] = {
+        order: planOrderOf(day).slice(),
+        times: Object.assign({}, state.planTimes[day] || {}),
+        auto: !!state.planAuto[day]
+      };
+    });
     state.touched = true;
-    state.planDirty = false;
-    histNote = { src: 'plan', text: 'Bus plan draft saved — ' + state.planOrder.length +
-      ' trips (' + planLabel(state.planDay) + ')' };
+    state.planDirty = {};
+    histNote = { src: 'plan', text: 'Bus plan draft saved — ' +
+      (touchedDays.length === 1
+        ? planOrderOf(touchedDays[0]).length + ' trips (' + planLabel(touchedDays[0]) + ')'
+        : touchedDays.length + ' days') };
     saveStore();
     flushSave();
     renderPlanner();
   }
 
   function planSubmit() {
-    if (!state.planDay || !state.planOrder.length) return;
-    var day = state.planDay, n = 0;
     var re = /^(\*?\s*)(\d{4}|TBC)(?=\s)/;
-    state.planOrder.forEach(function (id) {
-      var e = findEntry(id);
-      if (!e) return;
-      var nt = state.planTimes[id];
-      if (!nt || nt === e.timeStart || planLocked(e)) return;
-      e.timeStart = nt;
-      e.edited = true;
-      if (typeof e.rawText === 'string' && re.test(e.rawText)) {
-        e.rawText = e.rawText.replace(re, function (m, p1) { return p1 + nt; });
-      }
-      state.tlLines.forEach(function (l) {
-        if (l.entryId === e.id && l.kind === 'line' && typeof l.text === 'string' && re.test(l.text)) {
-          l.text = l.text.replace(re, function (m, p1) { return p1 + nt; });
+    var n = 0, dayCount = 0, lastDay = null;
+    Object.keys(state.planOrder).forEach(function (day) {
+      var order = state.planOrder[day], pt = state.planTimes[day] || {};
+      var dayN = 0;
+      order.forEach(function (id) {
+        var e = findEntry(id);
+        if (!e) return;
+        var nt = pt[id];
+        if (!nt || nt === e.timeStart || planLocked(e)) return;
+        e.timeStart = nt;
+        e.edited = true;
+        if (typeof e.rawText === 'string' && re.test(e.rawText)) {
+          e.rawText = e.rawText.replace(re, function (m, p1) { return p1 + nt; });
         }
+        state.tlLines.forEach(function (l) {
+          if (l.entryId === e.id && l.kind === 'line' && typeof l.text === 'string' && re.test(l.text)) {
+            l.text = l.text.replace(re, function (m, p1) { return p1 + nt; });
+          }
+        });
+        n++; dayN++;
       });
-      n++;
+      if (dayN) { dayCount++; lastDay = day; }
     });
-    if (state.busPlan) delete state.busPlan[day];
-    state.planDirty = false;
-    state.planOrder = []; state.planTimes = {};
+    state.busPlan = {};
+    state.planDirty = {};
+    state.planOrder = {}; state.planTimes = {}; state.planAuto = {};
     state.touched = true;
     histNote = { src: 'plan', text: 'Bus plan submitted — ' + n + ' trip' + (n === 1 ? '' : 's') +
-      ' retimed (' + planLabel(day) + ')' };
+      ' retimed' + (dayCount > 1 ? ' across ' + dayCount + ' days' :
+        dayCount === 1 ? ' (' + planLabel(lastDay) + ')' : '') };
     saveStore();
     flushSave();
     changed();
@@ -1675,17 +1696,17 @@
   }
 
   function planDiscard() {
-    if (!state.planDay) return;
-    var had = state.busPlan && state.busPlan[state.planDay];
-    if (had) {
-      delete state.busPlan[state.planDay];
+    var hadDraft = state.busPlan && Object.keys(state.busPlan).length;
+    var hadWork = Object.keys(state.planDirty || {}).some(function (d) { return state.planDirty[d]; });
+    state.busPlan = {};
+    state.planDirty = {};
+    state.planOrder = {}; state.planTimes = {}; state.planAuto = {};
+    if (hadDraft || hadWork) {
       state.touched = true;
-      histNote = { src: 'plan', text: 'Bus plan draft discarded (' + planLabel(state.planDay) + ')' };
+      histNote = { src: 'plan', text: 'Bus plan draft discarded' };
       saveStore();
       flushSave();
     }
-    state.planDirty = false;
-    state.planOrder = []; state.planTimes = {};
     renderPlanner();
   }
 
@@ -1710,105 +1731,135 @@
       host.innerHTML = '<div class="clash-empty clean">No bus trips in this month.</div>';
       return;
     }
-    planEnsure(days, dayList);
+    planEnsureAll(days);
 
-    /* working preview: respace the day's trips in the current order */
-    var r = CL.respace(planTrips(), { drag: state.planDragId });
-    state.planTimes = {};
-    r.plan.forEach(function (p) { state.planTimes[p.id] = p.time; });
-    var skipped = {};
-    r.skipped.forEach(function (id) { skipped[id] = true; });
+    /* per-day preview: only days with auto adjust on get respaced times —
+       the rest keep their entered times, drags just reorder */
+    var skippedByDay = {};
+    dayList.forEach(function (day) {
+      var order = planOrderOf(day, days);
+      var r = CL.respace(planTrips(day, order),
+        { drag: state.planAuto[day] ? state.planDragId : null });
+      var sk = {};
+      r.skipped.forEach(function (id) { sk[id] = true; });
+      skippedByDay[day] = sk;
+      if (state.planAuto[day]) {
+        var pt = {};
+        r.plan.forEach(function (p) { pt[p.id] = p.time; });
+        state.planTimes[day] = pt;
+      } else {
+        state.planTimes[day] = {};
+      }
+    });
     state.planDragId = null;          // consumed — further renders are stable
 
     /* badges come from the checker run over the projected times */
     var proj = state.entries.map(function (e) {
-      return (e.kind === 'bus' && e.date === state.planDay && state.planTimes[e.id] && !planLocked(e))
-        ? Object.assign({}, e, { timeStart: state.planTimes[e.id] }) : e;
+      if (e.kind !== 'bus' || !e.date) return e;
+      var pt = state.planTimes[e.date];
+      return (pt && pt[e.id] && !planLocked(e))
+        ? Object.assign({}, e, { timeStart: pt[e.id] }) : e;
     });
     var res = CL.analyze(proj);
-    var flagOf = {};
-    res.flags.forEach(function (f) { if (f.date === state.planDay) flagOf[f.id] = f; });
-
-    var reds = 0, orange = 0, perm = 0;
-    Object.keys(flagOf).forEach(function (id) {
-      var s = flagOf[id].severity;
-      if (s === 'red') reds++;
-      else if (s === 'orange') orange++;
-      else perm++;
-    });
-    var draft = (state.busPlan || {})[state.planDay];
-    btn.textContent = 'Bus planner' + (reds + orange ? ' · ' + (reds + orange) : '') +
-      (draft ? ' · draft' : '');
-
-    var act = 0;
-    state.planOrder.forEach(function (id) {
-      var e = findEntry(id);
-      if (e && planLocked(e)) act++;
+    var flagByDay = {};
+    res.flags.forEach(function (f) {
+      (flagByDay[f.date] = flagByDay[f.date] || {})[f.id] = f;
     });
 
-    var head = '<div class="clash-head">' +
-      (reds ? '<b class="sev-red">' + reds + ' clash' + (reds === 1 ? '' : 'es') + '</b>' : '') +
-      (reds && orange ? ' · ' : '') +
-      (orange ? '<b class="sev-orange">' + orange + ' tight</b>' : '') +
-      ((reds || orange) && perm ? ' · ' : '') +
-      (perm ? '<b class="sev-perm">' + perm + ' before 0700</b>' : '') +
-      '<span class="clash-unchecked">' + state.planOrder.length + ' trips' +
-      (act ? ' · ' + act + ' activation (2359/TBC)' : '') +
-      (draft ? (state.planDirty ? ' · draft saved — changes not saved' : ' · draft saved') :
-        state.planDirty ? ' · changes not saved' : ' · as scheduled') +
-      '</span></div>';
+    var totRed = 0, totOrange = 0;
+    Object.keys(flagByDay).forEach(function (d) {
+      Object.keys(flagByDay[d]).forEach(function (id) {
+        var s = flagByDay[d][id].severity;
+        if (s === 'red') totRed++;
+        else if (s === 'orange') totOrange++;
+      });
+    });
+    var anyDraft = Object.keys(state.busPlan || {}).length > 0;
+    btn.textContent = 'Bus planner' + (totRed + totOrange ? ' · ' + (totRed + totOrange) : '') +
+      (anyDraft ? ' · draft' : '');
 
-    var canSave = state.planDirty;
-    var canAct = state.planDirty || !!draft;
+    var dirtyN = Object.keys(state.planDirty).filter(function (d) { return state.planDirty[d]; }).length;
+    var canSave = dirtyN > 0;
+    var canAct = canSave || anyDraft;
     var html = '<div class="plan-toolbar">' +
-      '<label class="plan-daylabel">Day <select id="plan-day">' +
-      dayList.map(function (d) {
-        return '<option value="' + d + '"' + (d === state.planDay ? ' selected' : '') + '>' +
-          esc(planLabel(d)) + ' — ' + days[d].length + '</option>';
-      }).join('') + '</select></label>' +
+      '<span class="plan-scope">' + dayList.length + ' day' + (dayList.length === 1 ? '' : 's') +
+      ' with bus trips</span>' +
       '<span class="plan-actions">' +
       '<button id="plan-save" class="plan-btn"' + (canSave ? '' : ' disabled') + '>Save draft</button>' +
       '<button id="plan-submit" class="plan-btn plan-submit"' + (canAct ? '' : ' disabled') + '>Submit plan</button>' +
       '<button id="plan-discard" class="plan-btn"' + (canAct ? '' : ' disabled') + '>Discard</button>' +
       '</span></div>' +
-      '<div class="plan-hint">Drag trips to reorder — timings re-space after each drag. ' +
-      'Nothing changes in the schedule until you submit the plan.</div>' + head;
+      '<div class="plan-hint">Drag trips to reorder. With <b>auto adjust</b> on, that day’s timings ' +
+      're-space after each drag; off, times stay exactly as entered. Nothing changes in the ' +
+      'schedule until you submit the plan.</div>';
 
-    html += '<div class="plan-list">';
-    state.planOrder.forEach(function (id) {
-      var e = findEntry(id);
-      if (!e) return;
-      var f = flagOf[id];
-      var locked = planLocked(e);
-      var planned = state.planTimes[id] || e.timeStart || '';
-      var moved = !locked && planned !== (e.timeStart || '');
-      var sev = f ? f.severity : (locked ? 'activation' : skipped[id] ? 'skip' : 'ok');
-      html += '<div class="clash-item plan-row sev-' + sev + (locked ? ' plan-locked' : '') +
-        (moved ? ' plan-moved' : '') + '" data-id="' + esc(id) + '"' +
-        (locked ? '' : ' draggable="true"') + '>' +
-        '<span class="plan-handle" title="' + (locked ? '2359/TBC activation — locked' : 'Drag to reorder') + '">' +
-          (locked ? '–' : '⋮⋮') + '</span>' +
-        '<span class="clash-time">' + esc(planned) +
-          (moved ? ' <s class="plan-was" title="was here before planning">' + esc(e.timeStart) + '</s>' : '') + '</span>' +
-        '<span class="clash-route">' + esc(CL.normalizeLoc(e.from) || '—') + ' → ' +
-          esc(CL.normalizeLoc(e.to) || '—') + '</span>' +
-        '<span class="plan-qty">' + (e.qty === null || e.qty === undefined ? '?' : esc(String(e.qty))) + ' bus</span>' +
-        '<span class="clash-why">' + esc(e.activity || '') +
-          (e.coys && e.coys.length ? ' <i>(' + esc(e.coys.join(', ')) + ')</i>' : '') + '</span>' +
-        '<span class="clash-badge">' + (f
-          ? (f.severity === 'red' ? 'CLASH' : f.severity === 'orange' ? 'TIGHT' : 'PERMISSION')
-          : locked ? 'ACTIVATION' : skipped[id] ? 'SKIP' : 'OK') + '</span>' +
-        '</div>';
+    dayList.forEach(function (day) {
+      var flags = flagByDay[day] || {};
+      var reds = 0, orange = 0, perm = 0;
+      Object.keys(flags).forEach(function (id) {
+        var s = flags[id].severity;
+        if (s === 'red') reds++;
+        else if (s === 'orange') orange++;
+        else perm++;
+      });
+      var order = planOrderOf(day, days);
+      var act = 0;
+      order.forEach(function (id) {
+        var e = findEntry(id);
+        if (e && planLocked(e)) act++;
+      });
+      var draft = (state.busPlan || {})[day];
+      var dirty = !!state.planDirty[day];
+      var pt = state.planTimes[day] || {};
+      var skipped = skippedByDay[day] || {};
+
+      html += '<div class="plan-day" data-day="' + esc(day) + '">' +
+        '<div class="plan-dayhead">' +
+        '<span class="clash-date">' + esc(planLabel(day)) + ' — ' + order.length + ' trips</span>' +
+        '<label class="plan-auto" title="Re-space this day’s timings after each drag">' +
+        '<input type="checkbox" data-day="' + esc(day) + '"' +
+        (state.planAuto[day] ? ' checked' : '') + '> auto adjust</label>' +
+        '<span class="plan-daynote">' +
+        (reds ? '<b class="sev-red">' + reds + ' clash' + (reds === 1 ? '' : 'es') + '</b>' : '') +
+        (reds && orange ? ' · ' : '') +
+        (orange ? '<b class="sev-orange">' + orange + ' tight</b>' : '') +
+        ((reds || orange) && perm ? ' · ' : '') +
+        (perm ? '<b class="sev-perm">' + perm + ' before 0700</b>' : '') +
+        (act ? ((reds || orange || perm) ? ' · ' : '') + act + ' activation' : '') +
+        (draft ? (dirty ? ' · draft saved — changes not saved' : ' · draft saved') :
+          dirty ? ' · changes not saved' : '') +
+        '</span></div>';
+
+      html += '<div class="plan-list">';
+      order.forEach(function (id) {
+        var e = findEntry(id);
+        if (!e) return;
+        var f = flags[id];
+        var locked = planLocked(e);
+        var planned = pt[id] || e.timeStart || '';
+        var moved = !locked && planned !== (e.timeStart || '');
+        var sev = f ? f.severity : (locked ? 'activation' : skipped[id] ? 'skip' : 'ok');
+        html += '<div class="clash-item plan-row sev-' + sev + (locked ? ' plan-locked' : '') +
+          (moved ? ' plan-moved' : '') + '" data-id="' + esc(id) + '"' +
+          (locked ? '' : ' draggable="true"') + '>' +
+          '<span class="plan-handle" title="' + (locked ? '2359/TBC activation — locked' : 'Drag to reorder') + '">' +
+            (locked ? '–' : '⋮⋮') + '</span>' +
+          '<span class="clash-time">' + esc(planned) +
+            (moved ? ' <s class="plan-was" title="was here before planning">' + esc(e.timeStart) + '</s>' : '') + '</span>' +
+          '<span class="clash-route">' + esc(CL.normalizeLoc(e.from) || '—') + ' → ' +
+            esc(CL.normalizeLoc(e.to) || '—') + '</span>' +
+          '<span class="plan-qty">' + (e.qty === null || e.qty === undefined ? '?' : esc(String(e.qty))) + ' bus</span>' +
+          '<span class="clash-why">' + esc(e.activity || '') +
+            (e.coys && e.coys.length ? ' <i>(' + esc(e.coys.join(', ')) + ')</i>' : '') + '</span>' +
+          '<span class="clash-badge">' + (f
+            ? (f.severity === 'red' ? 'CLASH' : f.severity === 'orange' ? 'TIGHT' : 'PERMISSION')
+            : locked ? 'ACTIVATION' : skipped[id] ? 'SKIP' : 'OK') + '</span>' +
+          '</div>';
+      });
+      html += '</div></div>';
     });
-    html += '</div>';
     host.innerHTML = html;
 
-    var sel = $('plan-day');
-    if (sel) sel.addEventListener('change', function () {
-      state.planDay = sel.value;
-      state.planOrder = []; state.planTimes = {}; state.planDirty = false;
-      renderPlanner();
-    });
     var bSave = $('plan-save');
     if (bSave) bSave.addEventListener('click', planSaveDraft);
     var bSub = $('plan-submit');
@@ -1816,10 +1867,22 @@
     var bDis = $('plan-discard');
     if (bDis) bDis.addEventListener('click', planDiscard);
 
+    host.querySelectorAll('.plan-auto input').forEach(function (input) {
+      input.addEventListener('change', function () {
+        var day = input.getAttribute('data-day');
+        state.planAuto[day] = input.checked;
+        state.planTimes[day] = {};    // off = back to the entered times
+        state.planDirty[day] = true;
+        renderPlanner();
+      });
+    });
+
     var dragId = null;
     host.querySelectorAll('.plan-row[data-id]').forEach(function (row) {
       if (row.classList.contains('plan-locked')) return;
       var id = row.getAttribute('data-id');
+      var daySec = row.closest('.plan-day');
+      var day = daySec ? daySec.getAttribute('data-day') : null;
       row.addEventListener('dragstart', function (ev) {
         dragId = id;
         ev.dataTransfer.setData('text/plain', id);
@@ -1840,7 +1903,7 @@
       row.addEventListener('drop', function (ev) {
         ev.preventDefault();
         row.classList.remove('plan-drop');
-        if (dragId && dragId !== id) planMove(dragId, id);
+        if (dragId && day && dragId !== id) planMove(day, dragId, id);
         dragId = null;
       });
     });
