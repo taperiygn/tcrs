@@ -19,6 +19,12 @@
     tlLines: [],            // Troop-lift sheet as live lines ({row,kind,date,text,status,entryId})
     skipped: [],            // ICRF rows behind the template (`s`-prefixed ids in the grid)
     history: [],            // recent-changes trail ({at,src,text}), newest first — saved with the edits
+    busPlan: {},            // saved planner drafts: { day: {order:[entryId], times:{id:'HHMM'}} } — not applied until Submit
+    planDay: null,          // day shown in the planner tab
+    planOrder: [],          // working trip order for planDay (in memory)
+    planTimes: {},          // working respaced times for planDay ({id:'HHMM'}), entry.timeStart when absent
+    planDragId: null,       // trip just dragged — adopts its new slot on the next respace
+    planDirty: false,       // working plan differs from the saved draft
     tab: 'schedule',
     srcTab: 'icrf',
     view: 'date',           // schedule grouping
@@ -160,7 +166,7 @@
     }
     ['schwide', 'onlyS4', 'poc'].forEach(function (k) { if (typeof o[k] === 'boolean') state[k] = o[k]; });
     if (o.view === 'date' || o.view === 'coy') state.view = o.view;
-    if (o.srcTab === 'icrf' || o.srcTab === 'tl' || o.srcTab === 'clash') state.srcTab = o.srcTab;
+    if (o.srcTab === 'icrf' || o.srcTab === 'tl' || o.srcTab === 'clash' || o.srcTab === 'plan') state.srcTab = o.srcTab;
     if (o.tab === 'schedule' || o.tab === 'grid') state.tab = o.tab;
   }
   function syncControls() {
@@ -222,7 +228,7 @@
   /* -- saving -- */
   function saveStore(optsOnly) {    // debounced — heavy JSON write happens after a pause
     if (!state.model) return;
-    renderClashes();                // the clash tab tracks edits live
+    renderPlanner();                // the planner tab tracks edits live
     if (!optsOnly) state.touched = true;
     savePending = true;
     clearTimeout(saveTimer);
@@ -230,11 +236,12 @@
     if (!remote.conflict) setSync('busy', 'Saving…');
   }
   function editsPayload() {         // null = nothing edited, the parsed workbooks are the truth
-    if (!state.touched && !(state.history && state.history.length)) return null;
+    if (!state.touched && !(state.history && state.history.length) &&
+        !(state.busPlan && Object.keys(state.busPlan).length)) return null;
     return {
       updatedAt: new Date().toISOString(),
       entries: state.entries, tlLines: state.tlLines, skipped: state.skipped,
-      history: state.history
+      history: state.history, busPlan: state.busPlan || {}
     };
   }
   function flushSave(keepalive) {
@@ -246,7 +253,8 @@
     var o = currentOpts(), key = monthKey();
     var okLocal = lsSet(storeKey(), JSON.stringify({
       v: 3, at: Date.now(), updatedAt: e.updatedAt,
-      entries: e.entries, tlLines: e.tlLines, skipped: e.skipped, history: e.history || [], opts: o
+      entries: e.entries, tlLines: e.tlLines, skipped: e.skipped, history: e.history || [],
+      busPlan: e.busPlan || {}, opts: o
     }));
     if (remote.localFilesDirty && (state.files.icrf || state.files.tl)) {
       if (lsSet(filesKey(), JSON.stringify(state.files))) remote.localFilesDirty = false;
@@ -370,6 +378,7 @@
       v: 3, hasEdits: has, updatedAt: (ed && ed.updatedAt) || rec.savedAt,
       entries: has ? ed.entries : [], tlLines: has ? ed.tlLines : [], skipped: has ? ed.skipped : [],
       history: (ed && Array.isArray(ed.history)) ? ed.history : [],
+      busPlan: (ed && ed.busPlan && typeof ed.busPlan === 'object' && !Array.isArray(ed.busPlan)) ? ed.busPlan : {},
       opts: rec.opts, _remote: true
     };
   }
@@ -393,6 +402,9 @@
     state.tlLines = JSON.parse(JSON.stringify(state.pristine.tlLines));
     state.skipped = JSON.parse(JSON.stringify(state.pristine.skipped));
     normalizeTLLines();
+    state.busPlan = {};
+    state.planDay = null; state.planOrder = []; state.planTimes = {};
+    state.planDragId = null; state.planDirty = false;
     changed();
     rerenderSrc(true);
     state.touched = false;
@@ -808,6 +820,8 @@
     if (!model) {
       state.model = null; state.entries = []; state.restoredAt = null; state.touched = false;
       histLast = {}; histNote = null;
+      state.busPlan = {}; state.planDay = null; state.planOrder = [];
+      state.planTimes = {}; state.planDragId = null; state.planDirty = false;
       $('sync-pill').hidden = true;
       state.tlLines = []; state.skipped = [];
       $('results').hidden = true;
@@ -818,7 +832,7 @@
       setTab('schedule');
       renderChips();
       renderNotes();
-      renderClashes();
+      renderPlanner();
       return;
     }
 
@@ -853,6 +867,9 @@
       state.restoredAt = null;
     }
     state.history = (saved && Array.isArray(saved.history)) ? saved.history : [];
+    state.busPlan = (saved && saved.busPlan && typeof saved.busPlan === 'object' && !Array.isArray(saved.busPlan)) ? saved.busPlan : {};
+    state.planDay = null; state.planOrder = []; state.planTimes = {};
+    state.planDragId = null; state.planDirty = false;
 
     // companies added by manual rows in an earlier session
     state.entries.forEach(function (e) {
@@ -894,7 +911,7 @@
     setTab(state.tab);
     sync = { kind: '', text: '' };
     updateSavePill();
-    renderClashes();
+    renderPlanner();
     if (!saved || !saved._remote || remote.filesDirty || remote.localFilesDirty ||
         remote.revs[monthKey()] === undefined) saveStore(true);
 
@@ -1357,10 +1374,10 @@
     $('sheet-panel').classList.remove('blank');
     $('btn-src-icrf').classList.toggle('on', s === 'icrf');
     $('btn-src-tl').classList.toggle('on', s === 'tl');
-    $('btn-src-clash').classList.toggle('on', s === 'clash');
+    $('btn-src-planner').classList.toggle('on', s === 'plan');
     $('icrf-container').style.display = s === 'icrf' ? '' : 'none';
     $('tl-container').style.display = s === 'tl' ? '' : 'none';
-    $('clash-container').style.display = s === 'clash' ? '' : 'none';
+    $('planner-container').style.display = s === 'plan' ? '' : 'none';
     $('icrf-foot').style.display = s === 'icrf' ? '' : 'none';
     $('tl-foot').style.display = s === 'tl' ? '' : 'none';
     $('grid-searchwrap').style.display = s === 'icrf' ? '' : 'none';
@@ -1390,7 +1407,7 @@
     } else if (state.srcTab === 'tl') {
       state.tlGrid.rerender();
     }
-    if (state.srcTab === 'clash') renderClashes();
+    if (state.srcTab === 'plan') renderPlanner();
   }
 
   function rerenderSrc(fresh) {      // only the visible grid; the other redraws when shown
@@ -1514,45 +1531,220 @@
     renderHistory();
   }
 
-  /* ------------------------------------------------- bus clash tab -- */
-  /* Live fleet check: renders TCRSClash.analyze() as a tab beside the
-     live sheets. Recomputed on every save so it tracks edits as they
-     happen; nothing is stored — it is always derived from the rows. */
-  function renderClashes() {
-    var btn = $('btn-src-clash'), host = $('clash-container');
+  /* ------------------------------------------------- bus planner tab -- */
+  /* Drag-to-reorder planner for a day's bus trips — every trip of the
+     day is listed, including the clean ones. Dragging reorders the day;
+     times then auto-space with a minimal fix (entered times are kept
+     unless they would clash). The working plan lives in memory; Save
+     draft stores it with the month (busPlan in the edits payload) and
+     Submit writes the times into the entries and Troop-lift text, so
+     nothing reaches the schedule until Submit. 2359/TBC activation
+     trips are listed but locked. */
+
+  function planDays() {             // day -> bus entries
+    var days = {};
+    state.entries.forEach(function (e) {
+      if (e.kind !== 'bus' || !e.date || !/^\d{4}-\d{2}-\d{2}$/.test(e.date)) return;
+      (days[e.date] = days[e.date] || []).push(e);
+    });
+    return days;
+  }
+
+  function planLabel(day) { return T.dowOf(day) + ' ' + T.fmtDate(day); }
+
+  function planLocked(e) {          // late-night activation — not plannable
+    var ts = String(e.timeStart || '').trim();
+    return ts === '2359' || ts === 'TBC';
+  }
+
+  /* make planDay/planOrder/planTimes match the loaded entries */
+  function planEnsure(days, dayList) {
+    if (!state.planDay || dayList.indexOf(state.planDay) === -1) {
+      var dds = Object.keys(state.busPlan || {}).filter(function (d) {
+        return dayList.indexOf(d) !== -1;
+      }).sort();
+      state.planDay = dds.length ? dds[0] : dayList[0];
+      state.planOrder = []; state.planTimes = {}; state.planDirty = false;
+    }
+    var cur = days[state.planDay];
+    var have = {};
+    cur.forEach(function (e) { have[e.id] = true; });
+    state.planOrder = (state.planOrder || []).filter(function (id) { return have[id]; });
+    if (!state.planOrder.length) {
+      var draft = (state.busPlan || {})[state.planDay];
+      if (draft && Array.isArray(draft.order) && draft.order.length) {
+        state.planOrder = draft.order.filter(function (id) { return have[id]; });
+        state.planTimes = Object.assign({}, draft.times || {});
+      } else {
+        state.planTimes = {};
+        var CLm = window.TCRSClash;
+        state.planOrder = cur.slice().sort(function (a, b) {
+          var ta = CLm ? CLm.toMin(a.timeStart) : null;
+          var tb = CLm ? CLm.toMin(b.timeStart) : null;
+          return (ta === null ? 1441 : ta) - (tb === null ? 1441 : tb);
+        }).map(function (e) { return e.id; });
+      }
+    }
+    /* slot in entries the order does not know yet (first build fills the
+       whole day; rows added after a draft keep the time order) */
+    cur.forEach(function (e) {
+      if (state.planOrder.indexOf(e.id) !== -1) return;
+      var CLm2 = window.TCRSClash;
+      var t = CLm2 ? CLm2.toMin(state.planTimes[e.id] || e.timeStart) : null;
+      var at = state.planOrder.length;
+      for (var i = 0; i < state.planOrder.length; i++) {
+        var o = findEntry(state.planOrder[i]);
+        if (!o) continue;
+        var ot = CLm2 ? CLm2.toMin(state.planTimes[o.id] || o.timeStart) : null;
+        if ((ot === null ? 1441 : ot) > (t === null ? 1441 : t)) { at = i; break; }
+      }
+      state.planOrder.splice(at, 0, e.id);
+    });
+  }
+
+  function planTrips() {            // respace input from the working plan
+    return state.planOrder.map(function (id) {
+      var e = findEntry(id);
+      if (!e) return { id: id, timeStart: 'TBC', from: '', to: '', qty: null, lock: true };
+      var locked = planLocked(e);
+      return {
+        id: id,
+        timeStart: locked ? e.timeStart : (state.planTimes[id] || e.timeStart),
+        from: e.from, to: e.to, qty: e.qty, lock: locked
+      };
+    });
+  }
+
+  function planMove(dragId, targetId) {
+    var from = state.planOrder.indexOf(dragId), to = state.planOrder.indexOf(targetId);
+    if (from < 0 || to < 0 || from === to) return;
+    state.planOrder.splice(to, 0, state.planOrder.splice(from, 1)[0]);
+    state.planDragId = dragId;      // the dragged trip adopts its new slot
+    state.planDirty = true;
+    renderPlanner();
+  }
+
+  function planSaveDraft() {
+    if (!state.planDay || !state.planOrder.length) return;
+    state.busPlan = state.busPlan || {};
+    state.busPlan[state.planDay] = {
+      order: state.planOrder.slice(),
+      times: Object.assign({}, state.planTimes)
+    };
+    state.touched = true;
+    state.planDirty = false;
+    histNote = { src: 'plan', text: 'Bus plan draft saved — ' + state.planOrder.length +
+      ' trips (' + planLabel(state.planDay) + ')' };
+    saveStore();
+    flushSave();
+    renderPlanner();
+  }
+
+  function planSubmit() {
+    if (!state.planDay || !state.planOrder.length) return;
+    var day = state.planDay, n = 0;
+    var re = /^(\*?\s*)(\d{4}|TBC)(?=\s)/;
+    state.planOrder.forEach(function (id) {
+      var e = findEntry(id);
+      if (!e) return;
+      var nt = state.planTimes[id];
+      if (!nt || nt === e.timeStart || planLocked(e)) return;
+      e.timeStart = nt;
+      e.edited = true;
+      if (typeof e.rawText === 'string' && re.test(e.rawText)) {
+        e.rawText = e.rawText.replace(re, function (m, p1) { return p1 + nt; });
+      }
+      state.tlLines.forEach(function (l) {
+        if (l.entryId === e.id && l.kind === 'line' && typeof l.text === 'string' && re.test(l.text)) {
+          l.text = l.text.replace(re, function (m, p1) { return p1 + nt; });
+        }
+      });
+      n++;
+    });
+    if (state.busPlan) delete state.busPlan[day];
+    state.planDirty = false;
+    state.planOrder = []; state.planTimes = {};
+    state.touched = true;
+    histNote = { src: 'plan', text: 'Bus plan submitted — ' + n + ' trip' + (n === 1 ? '' : 's') +
+      ' retimed (' + planLabel(day) + ')' };
+    saveStore();
+    flushSave();
+    changed();
+    renderPlanner();
+    if (n) toast('Plan submitted — ' + n + ' trip' + (n === 1 ? '' : 's') + ' retimed.', false);
+  }
+
+  function planDiscard() {
+    if (!state.planDay) return;
+    var had = state.busPlan && state.busPlan[state.planDay];
+    if (had) {
+      delete state.busPlan[state.planDay];
+      state.touched = true;
+      histNote = { src: 'plan', text: 'Bus plan draft discarded (' + planLabel(state.planDay) + ')' };
+      saveStore();
+      flushSave();
+    }
+    state.planDirty = false;
+    state.planOrder = []; state.planTimes = {};
+    renderPlanner();
+  }
+
+  function renderPlanner() {
+    var btn = $('btn-src-planner'), host = $('planner-container');
     if (!btn || !host) return;
     var CL = window.TCRSClash;
     if (!CL) {                          // module missing — never break the save path
-      btn.textContent = 'Bus clashes';
-      host.innerHTML = '<div class="clash-empty">Clash checker unavailable.</div>';
+      btn.textContent = 'Bus planner';
+      host.innerHTML = '<div class="clash-empty">Bus planner unavailable.</div>';
       return;
     }
-    var res = { flags: [], unchecked: 0, checked: 0, activation: 0 };
-    if (state.model) res = CL.analyze(state.entries);
+    if (!state.model) {
+      btn.textContent = 'Bus planner';
+      host.innerHTML = '<div class="clash-empty">Load the month’s files to plan the buses.</div>';
+      return;
+    }
+    var days = planDays();
+    var dayList = Object.keys(days).sort();
+    if (!dayList.length) {
+      btn.textContent = 'Bus planner';
+      host.innerHTML = '<div class="clash-empty clean">No bus trips in this month.</div>';
+      return;
+    }
+    planEnsure(days, dayList);
+
+    /* working preview: respace the day's trips in the current order */
+    var r = CL.respace(planTrips(), { drag: state.planDragId });
+    state.planTimes = {};
+    r.plan.forEach(function (p) { state.planTimes[p.id] = p.time; });
+    var skipped = {};
+    r.skipped.forEach(function (id) { skipped[id] = true; });
+    state.planDragId = null;          // consumed — further renders are stable
+
+    /* badges come from the checker run over the projected times */
+    var proj = state.entries.map(function (e) {
+      return (e.kind === 'bus' && e.date === state.planDay && state.planTimes[e.id] && !planLocked(e))
+        ? Object.assign({}, e, { timeStart: state.planTimes[e.id] }) : e;
+    });
+    var res = CL.analyze(proj);
+    var flagOf = {};
+    res.flags.forEach(function (f) { if (f.date === state.planDay) flagOf[f.id] = f; });
 
     var reds = 0, orange = 0, perm = 0;
-    res.flags.forEach(function (f) {
-      if (f.severity === 'red') reds++;
-      else if (f.severity === 'orange') orange++;
+    Object.keys(flagOf).forEach(function (id) {
+      var s = flagOf[id].severity;
+      if (s === 'red') reds++;
+      else if (s === 'orange') orange++;
       else perm++;
     });
-    btn.textContent = 'Bus clashes' + (reds + orange ? ' · ' + (reds + orange) : '');
+    var draft = (state.busPlan || {})[state.planDay];
+    btn.textContent = 'Bus planner' + (reds + orange ? ' · ' + (reds + orange) : '') +
+      (draft ? ' · draft' : '');
 
-    if (!state.model) {
-      host.innerHTML = '<div class="clash-empty">Load the month’s files to check the buses.</div>';
-      return;
-    }
-    if (!res.flags.length && !res.unchecked && !res.activation) {
-      host.innerHTML = '<div class="clash-empty clean">All ' + res.checked +
-        ' bus trips fit the ' + CL.FLEET + ' buses — no clashes.</div>';
-      return;
-    }
-
-    var notes = '';
-    if (res.activation) notes += res.activation + ' late-night activation trip' +
-      (res.activation === 1 ? '' : 's') + ' (2359/TBC) — buses activated, not checked';
-    if (res.unchecked) notes += (notes ? ' · ' : '') + res.unchecked +
-      ' trip' + (res.unchecked === 1 ? '' : 's') + ' not fully checked — a needed route is not in the timing table';
+    var act = 0;
+    state.planOrder.forEach(function (id) {
+      var e = findEntry(id);
+      if (e && planLocked(e)) act++;
+    });
 
     var head = '<div class="clash-head">' +
       (reds ? '<b class="sev-red">' + reds + ' clash' + (reds === 1 ? '' : 'es') + '</b>' : '') +
@@ -1560,33 +1752,98 @@
       (orange ? '<b class="sev-orange">' + orange + ' tight</b>' : '') +
       ((reds || orange) && perm ? ' · ' : '') +
       (perm ? '<b class="sev-perm">' + perm + ' before 0700</b>' : '') +
-      (notes ? '<span class="clash-unchecked">' + notes + '</span>' : '') +
-      '</div>';
+      '<span class="clash-unchecked">' + state.planOrder.length + ' trips' +
+      (act ? ' · ' + act + ' activation (2359/TBC)' : '') +
+      (draft ? (state.planDirty ? ' · draft saved — changes not saved' : ' · draft saved') :
+        state.planDirty ? ' · changes not saved' : ' · as scheduled') +
+      '</span></div>';
 
-    if (!res.flags.length) {
-      var blind = res.unchecked + res.activation;
-      host.innerHTML = head + '<div class="clash-empty clean">No clashes — but ' + blind +
-        ' trip' + (blind === 1 ? '' : 's') + ' could not be checked.</div>';
-      return;
-    }
+    var canSave = state.planDirty;
+    var canAct = state.planDirty || !!draft;
+    var html = '<div class="plan-toolbar">' +
+      '<label class="plan-daylabel">Day <select id="plan-day">' +
+      dayList.map(function (d) {
+        return '<option value="' + d + '"' + (d === state.planDay ? ' selected' : '') + '>' +
+          esc(planLabel(d)) + ' — ' + days[d].length + '</option>';
+      }).join('') + '</select></label>' +
+      '<span class="plan-actions">' +
+      '<button id="plan-save" class="plan-btn"' + (canSave ? '' : ' disabled') + '>Save draft</button>' +
+      '<button id="plan-submit" class="plan-btn plan-submit"' + (canAct ? '' : ' disabled') + '>Submit plan</button>' +
+      '<button id="plan-discard" class="plan-btn"' + (canAct ? '' : ' disabled') + '>Discard</button>' +
+      '</span></div>' +
+      '<div class="plan-hint">Drag trips to reorder — timings re-space after each drag. ' +
+      'Nothing changes in the schedule until you submit the plan.</div>' + head;
 
-    var byDay = {};
-    res.flags.forEach(function (f) { (byDay[f.date] = byDay[f.date] || []).push(f); });
-    var html = head;
-    Object.keys(byDay).sort().forEach(function (day) {
-      html += '<div class="clash-day"><div class="clash-date">' + esc(T.dowOf(day) + ' ' + T.fmtDate(day)) + '</div>';
-      byDay[day].forEach(function (f) {
-        html += '<div class="clash-item sev-' + f.severity + '">' +
-          '<span class="clash-badge">' + (f.severity === 'red' ? 'CLASH' : f.severity === 'orange' ? 'TIGHT' : 'PERMISSION') + '</span>' +
-          '<span class="clash-time">' + esc(f.time) + '</span>' +
-          '<span class="clash-route">' + esc(f.route) + '</span>' +
-          '<span class="clash-why">' + esc(f.msg) +
-          (f.activity ? ' <i>· ' + esc(f.activity) + (f.coys && f.coys.length ? ' (' + esc(f.coys.join(', ')) + ')' : '') + '</i>' : '') +
-          '</span></div>';
-      });
-      html += '</div>';
+    html += '<div class="plan-list">';
+    state.planOrder.forEach(function (id) {
+      var e = findEntry(id);
+      if (!e) return;
+      var f = flagOf[id];
+      var locked = planLocked(e);
+      var planned = state.planTimes[id] || e.timeStart || '';
+      var moved = !locked && planned !== (e.timeStart || '');
+      var sev = f ? f.severity : (locked ? 'activation' : skipped[id] ? 'skip' : 'ok');
+      html += '<div class="clash-item plan-row sev-' + sev + (locked ? ' plan-locked' : '') +
+        (moved ? ' plan-moved' : '') + '" data-id="' + esc(id) + '"' +
+        (locked ? '' : ' draggable="true"') + '>' +
+        '<span class="plan-handle" title="' + (locked ? '2359/TBC activation — locked' : 'Drag to reorder') + '">' +
+          (locked ? '–' : '⋮⋮') + '</span>' +
+        '<span class="clash-time">' + esc(planned) +
+          (moved ? ' <s class="plan-was" title="was here before planning">' + esc(e.timeStart) + '</s>' : '') + '</span>' +
+        '<span class="clash-route">' + esc(CL.normalizeLoc(e.from) || '—') + ' → ' +
+          esc(CL.normalizeLoc(e.to) || '—') + '</span>' +
+        '<span class="plan-qty">' + (e.qty === null || e.qty === undefined ? '?' : esc(String(e.qty))) + ' bus</span>' +
+        '<span class="clash-why">' + esc(e.activity || '') +
+          (e.coys && e.coys.length ? ' <i>(' + esc(e.coys.join(', ')) + ')</i>' : '') + '</span>' +
+        '<span class="clash-badge">' + (f
+          ? (f.severity === 'red' ? 'CLASH' : f.severity === 'orange' ? 'TIGHT' : 'PERMISSION')
+          : locked ? 'ACTIVATION' : skipped[id] ? 'SKIP' : 'OK') + '</span>' +
+        '</div>';
     });
+    html += '</div>';
     host.innerHTML = html;
+
+    var sel = $('plan-day');
+    if (sel) sel.addEventListener('change', function () {
+      state.planDay = sel.value;
+      state.planOrder = []; state.planTimes = {}; state.planDirty = false;
+      renderPlanner();
+    });
+    var bSave = $('plan-save');
+    if (bSave) bSave.addEventListener('click', planSaveDraft);
+    var bSub = $('plan-submit');
+    if (bSub) bSub.addEventListener('click', planSubmit);
+    var bDis = $('plan-discard');
+    if (bDis) bDis.addEventListener('click', planDiscard);
+
+    var dragId = null;
+    host.querySelectorAll('.plan-row[data-id]').forEach(function (row) {
+      if (row.classList.contains('plan-locked')) return;
+      var id = row.getAttribute('data-id');
+      row.addEventListener('dragstart', function (ev) {
+        dragId = id;
+        ev.dataTransfer.setData('text/plain', id);
+        ev.dataTransfer.effectAllowed = 'move';
+        row.classList.add('plan-dragging');
+      });
+      row.addEventListener('dragend', function () {
+        row.classList.remove('plan-dragging');
+        host.querySelectorAll('.plan-drop').forEach(function (n) { n.classList.remove('plan-drop'); });
+      });
+      row.addEventListener('dragover', function (ev) {
+        if (!dragId || dragId === id) return;
+        ev.preventDefault();
+        ev.dataTransfer.dropEffect = 'move';
+        row.classList.add('plan-drop');
+      });
+      row.addEventListener('dragleave', function () { row.classList.remove('plan-drop'); });
+      row.addEventListener('drop', function (ev) {
+        ev.preventDefault();
+        row.classList.remove('plan-drop');
+        if (dragId && dragId !== id) planMove(dragId, id);
+        dragId = null;
+      });
+    });
   }
 
   /* ------------------------------------------------------- schedule UI -- */
@@ -2009,7 +2266,7 @@
     // live-sheet sub-tabs
     $('btn-src-icrf').addEventListener('click', function () { setSrc('icrf'); saveStore(true); });
     $('btn-src-tl').addEventListener('click', function () { setSrc('tl'); saveStore(true); });
-    $('btn-src-clash').addEventListener('click', function () { setSrc('clash'); saveStore(true); });
+    $('btn-src-planner').addEventListener('click', function () { setSrc('plan'); saveStore(true); });
 
     // schedule view
     $('view-date').addEventListener('click', function () { state.view = 'date'; syncControls(); refreshDerived(); saveStore(true); });
@@ -2250,6 +2507,9 @@
     resetEdits: resetEdits,
     saveStore: saveStore, flushSave: flushSave, flushSchedule: flushSchedule,
     setTab: setTab, setSrc: setSrc,
+    planMove: planMove, planSaveDraft: planSaveDraft,
+    planSubmit: planSubmit, planDiscard: planDiscard,
+    renderPlanner: renderPlanner,
     renderUploadStatus: renderUploadStatus,
     handleFile: handleFile, restoreWorkspace: restoreWorkspace,
     chosenSheet: chosenSheet, sheetPickerHtml: sheetPickerHtml,

@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>bus planner test</title>
+<style>.toast,.bgwash{display:none}body{background:#fff;margin:0}</style>
+<link rel="stylesheet" href="../styles.css">
+<script src="../vendor/exceljs.min.js"></script>
+<script src="../parser.js"></script>
+<script src="../clash.js"></script>
+</head><body>
+<pre id="test-out">starting…</pre>
+<script>
+/* Bus-planner verification: part A exercises the pure respace() engine
+   (minimal-fix semantics, drag adoption, locked activation trips);
+   part B drives the real app — drag reorder, Save draft, Submit plan
+   and Discard — against a Troop Lift sheet. */
+(async function () {
+  var out = [], failures = 0;
+  function ok(name, cond, extra) {
+    out.push((cond ? 'PASS ' : 'FAIL ') + name + (cond ? '' : '  [' + (extra === undefined ? '' : extra) + ']'));
+    if (!cond) failures++;
+  }
+  function log() { document.getElementById('test-out').textContent = out.join('\n'); }
+  function txt(el) { return el ? el.textContent : ''; }
+  var C = window.TCRSClash, A;
+  var D = '2026-11-23';
+
+  function mk(id, time, from, to, qty, lock) {
+    return { id: id, timeStart: time, from: from, to: to, qty: qty, lock: !!lock };
+  }
+  function times(r) { return r.plan.map(function (p) { return p.time; }).join(','); }
+  function moved(r) { return r.plan.map(function (p) { return p.moved ? 'M' : '.'; }).join(''); }
+
+  /* ---------- part A: the respace engine ---------- */
+  try {
+    ok('module loaded', !!C && typeof C.respace === 'function' && typeof C.toMin === 'function');
+
+    var r = C.respace([mk('a', '0800', 'MTL', 'RHC', 4), mk('b', '0900', 'RHC', 'MTL', 4)]);
+    ok('feasible entered times are kept (minimal fix)',
+      times(r) === '0800,0900' && moved(r) === '..' && r.skipped.length === 0, times(r) + ' ' + moved(r));
+
+    r = C.respace([mk('a', '0800', 'MTL', 'RHC', 4), mk('b', '0820', 'MTL', 'RHC', 4)]);
+    ok('a clashing trip is pushed to the earliest feasible slot',
+      times(r) === '0800,0830' && moved(r) === '.M', times(r) + ' ' + moved(r));
+
+    r = C.respace([mk('b', '0820', 'MTL', 'RHC', 4), mk('a', '0800', 'MTL', 'RHC', 4)], { drag: 'b' });
+    ok('the dragged trip adopts its new slot (0700 earliest)',
+      times(r) === '0700,0800' && moved(r) === 'M.', times(r) + ' ' + moved(r));
+
+    r = C.respace([mk('b', '0900', 'RHC', 'MTL', 4), mk('a', '0800', 'MTL', 'RHC', 4)]);
+    ok('a trip moved later is pushed to when its buses can physically be there',
+      times(r) === '0900,0915' && moved(r) === '.M', times(r) + ' ' + moved(r));
+
+    r = C.respace([mk('a', '0630', 'MTL', 'RHC', 4)]);
+    ok('a sanctioned pre-0700 trip keeps its time',
+      times(r) === '0630' && moved(r) === '.', times(r) + ' ' + moved(r));
+
+    r = C.respace([mk('a', '0800', 'RHC', 'HG RANGE', 4), mk('b', '0810', '100M RANGE', 'RHC', 4)]);
+    ok('same place under two names is a 0-min turnaround',
+      times(r) === '0800,0810' && moved(r) === '..', times(r) + ' ' + moved(r));
+
+    r = C.respace([
+      mk('a', '0700', 'RHC', 'MTL', 1), mk('b', '0700', 'RHC', 'MTL', 1),
+      mk('c', '0700', 'RHC', 'MTL', 1), mk('d', '0700', 'RHC', 'MTL', 1),
+      mk('e', '0900', 'S1', 'RHC', 1), mk('f', '0730', 'MTL', 'RHC', 4)]);
+    ok('a trip needing an unknown deadhead is transparent (skipped, no bus used)',
+      times(r) === '0700,0700,0700,0700,0900,0730' && moved(r) === '......' &&
+      r.skipped.indexOf('e') > -1 && r.skipped.length === 1,
+      times(r) + ' ' + moved(r) + ' skipped=' + r.skipped.join(','));
+
+    r = C.respace([
+      mk('a', '0800', 'MTL', 'RHC', 4),
+      mk('n', '2359', '100M RANGE', 'MTL', 4, true),
+      mk('b', '0830', 'RHC', 'MTL', 4)]);
+    ok('a locked 2359 trip keeps its time and consumes no buses',
+      times(r) === '0800,2359,0830' && r.skipped.indexOf('n') > -1, times(r) + ' skipped=' + r.skipped.join(','));
+
+    r = C.respace([mk('a', '0800', 'MTL', 'RHC', 4), mk('b', '0820', 'MTL', 'RHC', 9)]);
+    ok('a trip asking for more buses than the fleet is transparent',
+      times(r) === '0800,0820' && r.skipped.indexOf('b') > -1, times(r) + ' skipped=' + r.skipped.join(','));
+
+    r = C.respace([mk('a', 'TBC', 'MTL', 'RHC', 4), mk('b', '0800', 'RHC', 'MTL', 4)]);
+    ok('a TBC trip is transparent and does not constrain the day',
+      times(r) === 'TBC,0800' && r.skipped.indexOf('a') > -1, times(r) + ' skipped=' + r.skipped.join(','));
+  } catch (e) {
+    failures++;
+    out.push('CRASH(A) ' + (e && e.stack || e));
+  }
+
+  /* ---------- part B: the live planner tab ---------- */
+  try {
+    var html = await fetch('../index.html').then(function (r0) { return r0.text(); });
+    var doc = new DOMParser().parseFromString(html, 'text/html');
+    document.body.appendChild(doc.querySelector('header'));
+    document.body.appendChild(doc.querySelector('main'));
+    document.body.appendChild(doc.querySelector('.toast'));
+
+    window.__TCRS_TEST_MODE = true;
+    eval(await fetch('../app.js').then(function (r0) { return r0.text(); }));
+    eval(await fetch('../sheet.js').then(function (r0) { return r0.text(); }));
+    A = window.__tcrs;
+
+    localStorage.clear();
+
+    var iw = new ExcelJS.Workbook();
+    var ws = iw.addWorksheet('NOVEMBER');
+    ws.getRow(1).values = [, 'Resource', , , 'Execution Time', , , , 'Location', , 'POC Details', , ,];
+    ws.getRow(2).values = [, 'Type of Veh', 'Qty', 'Required TO', 'Start', , 'End', , 'Reporting', 'Destination', 'Conducting Officer', 'Contact No.', 'Unit', 'Remarks'];
+    ws.getRow(3).values = ['SCH 4 - 4TH COY - RANGE DETAIL', 'LUV', 1, 1, '23/11/26', '08:00', '23/11/26', '09:00', 'RHC', 'HG RANGE', '3WO TEST', '84980951', 'SCH 4', ''];
+
+    var tw = new ExcelJS.Workbook();
+    var tws = tw.addWorksheet('NOVEMBER TL');
+    var lines = [
+      'NOVEMBER TL',
+      '23/11',
+      '0800 MTL - RHC 4 BUSES (4TH FIRST)',
+      '0820 MTL - RHC 4 BUSES (4TH SECOND)',
+      '0900 RHC - MTL 4 BUSES (4TH BACK)',
+      '0930 S1 - 163SQN 1 BUSES (4TH S1)',
+      '2359 100M RANGE - MTL 4 BUSES (4TH NIGHT)'
+    ];
+    lines.forEach(function (t, i) { tws.getRow(3 + i).getCell(1).value = t; });
+    async function toFile(wb, name) { return new File([await wb.xlsx.writeBuffer()], name); }
+    await A.handleFile(await toFile(iw, 'icrf.xlsx'), 'icrf');
+    await A.handleFile(await toFile(tw, 'troop lift.xlsx'), 'tl');
+    ok('model built from workbooks', !!A.state.model);
+    A.setTab('grid');
+    A.setSrc('plan');
+
+    ok('planner lists every trip of the day, clean ones included',
+      document.querySelectorAll('#planner-container .plan-row').length === 5,
+      'rows=' + document.querySelectorAll('#planner-container .plan-row').length);
+    ok('unknown route shows as SKIP, 2359 as locked ACTIVATION',
+      document.querySelectorAll('#planner-container .clash-item.sev-skip').length === 1 &&
+      document.querySelectorAll('#planner-container .clash-item.sev-activation.plan-locked').length === 1);
+    ok('no draft yet — Save/Submit/Discard disabled',
+      document.getElementById('plan-save').disabled &&
+      document.getElementById('plan-submit').disabled &&
+      document.getElementById('plan-discard').disabled);
+
+    function rowId(i) {
+      return document.querySelectorAll('#planner-container .plan-row')[i].getAttribute('data-id');
+    }
+    function rowTime(i) { return A.state.planTimes[rowId(i)]; }
+
+    /* drag the 0820 trip above the 0800 one */
+    A.planMove(rowId(1), rowId(0));
+    ok('dragged trip moved to the top and adopted the 0700 slot',
+      rowTime(0) === '0700' && rowTime(1) === '0800' &&
+      document.querySelector('#planner-container .plan-row').classList.contains('plan-moved'),
+      rowTime(0) + ',' + rowTime(1));
+    ok('drag enables Save/Submit/Discard',
+      !document.getElementById('plan-save').disabled && !document.getElementById('plan-submit').disabled);
+
+    A.planSaveDraft();
+    ok('Save draft stores order+times with the month',
+      !!A.state.busPlan['2026-11-23'] && A.state.busPlan['2026-11-23'].order.length === 5 &&
+      A.state.busPlan['2026-11-23'].times[rowId(0)] === '0700',
+      JSON.stringify(A.state.busPlan));
+    ok('draft silences the dirty flag and buttons flip',
+      !A.state.planDirty && document.getElementById('plan-save').disabled &&
+      !document.getElementById('plan-submit').disabled);
+    A.flushSave();
+    ok('draft save lands in the history trail',
+      /Bus plan draft saved/.test((A.state.history[0] || {}).text || ''),
+      JSON.stringify((A.state.history[0] || {}).text || ''));
+    ok('schedule untouched by the draft — TL still says 0820',
+      A.tlText().indexOf('0820 MTL - RHC 4 BUSES') > -1);
+
+    /* reload simulation: rebuild the planner state from the draft */
+    A.state.planOrder = []; A.state.planTimes = {}; A.state.planDay = null;
+    A.renderPlanner();
+    ok('draft survives a reload and restores the dragged order',
+      rowTime(0) === '0700' && rowTime(1) === '0800', rowTime(0) + ',' + rowTime(1));
+
+    /* submit writes the plan into the schedule */
+    A.planSubmit();
+    var second = A.state.entries.filter(function (e) { return e.activity === 'SECOND'; })[0];
+    ok('Submit retimed the dragged trip to 0700',
+      !!second && second.timeStart === '0700' && second.edited,
+      second && second.timeStart);
+    ok('Submit rewrote the raw text of the trip', /^0700 MTL - RHC/.test(second.rawText || ''),
+      second.rawText);
+    ok('Submit rewrote the Troop-lift line text',
+      A.tlText().indexOf('0700 MTL - RHC 4 BUSES (4TH SECOND)') > -1, A.tlText());
+    ok('other trips kept their times', (A.state.entries.filter(function (e) {
+      return e.activity === 'FIRST';
+    })[0] || {}).timeStart === '0800');
+    ok('Submit cleared the draft and the history says so',
+      !A.state.busPlan['2026-11-23'] &&
+      /Bus plan submitted/.test((A.state.history[0] || {}).text || ''),
+      JSON.stringify((A.state.history[0] || {}).text || ''));
+
+    /* discard throws away working changes and any saved draft */
+    A.planMove(rowId(1), rowId(0));
+    A.planSaveDraft();
+    A.planMove(rowId(1), rowId(0));
+    ok('second drag re-marks the plan dirty', A.state.planDirty);
+    A.planDiscard();
+    ok('Discard clears the draft and restores the schedule order',
+      !A.state.busPlan['2026-11-23'] && !A.state.planDirty &&
+      rowTime(0) === '0700' && rowTime(1) === '0800',
+      rowTime(0) + ',' + rowTime(1) + ' draft=' + JSON.stringify(A.state.busPlan));
+
+    localStorage.clear();
+  } catch (e) {
+    failures++;
+    out.push('CRASH(B) ' + (e && e.stack || e));
+  }
+  log();
+  document.title = failures ? 'PLAN FAILED' : 'PLAN OK';
+})();
+</script></body></html>

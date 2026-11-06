@@ -10,7 +10,7 @@
 <script>
 /* Bus-clash verification: part A exercises the pure fleet simulation
    (TCRSClash.analyze) against hand-built days; part B drives the real app
-   with a Troop Lift sheet and checks the live "Bus clashes" tab. */
+   with a Troop Lift sheet and checks the live "Bus planner" tab. */
 (async function () {
   var out = [], failures = 0;
   function ok(name, cond, extra) {
@@ -181,37 +181,40 @@
     ok('model built from workbooks', !!A.state.model);
 
     A.setTab('grid');
-    A.setSrc('clash');
-    ok('clash tab opens', document.getElementById('btn-src-clash').classList.contains('on') &&
-      document.getElementById('clash-container').style.display === '');
-    ok('clash tab scrolls vertically',
-      getComputedStyle(document.getElementById('clash-container')).overflowY === 'auto',
-      getComputedStyle(document.getElementById('clash-container')).overflowY);
-    ok('tab button carries the red+tight count',
-      txt(document.getElementById('btn-src-clash')).indexOf('· 1') > -1,
-      txt(document.getElementById('btn-src-clash')));
-    ok('red clash listed for the 0820 trip',
-      document.querySelectorAll('#clash-container .clash-item.sev-red').length === 1 &&
-      /0820/.test(txt(document.querySelector('#clash-container .clash-item.sev-red'))),
-      txt(document.querySelector('#clash-container .clash-item.sev-red')));
+    A.setSrc('plan');
+    ok('planner tab opens', document.getElementById('btn-src-planner').classList.contains('on') &&
+      document.getElementById('planner-container').style.display === '');
+    ok('planner tab scrolls vertically',
+      getComputedStyle(document.getElementById('planner-container')).overflowY === 'auto',
+      getComputedStyle(document.getElementById('planner-container')).overflowY);
+    ok('tab button shows no clash count — the preview auto-spaces',
+      txt(document.getElementById('btn-src-planner')).indexOf('·') === -1,
+      txt(document.getElementById('btn-src-planner')));
+    ok('every trip of the day is listed, clean ones included',
+      document.querySelectorAll('#planner-container .plan-row').length === 6,
+      'rows=' + document.querySelectorAll('#planner-container .plan-row').length);
+    ok('the clashing 0820 trip is auto-spaced to 0830 in the preview',
+      document.querySelectorAll('#planner-container .plan-row.plan-moved').length === 1 &&
+      /0830/.test(txt(document.querySelector('#planner-container .plan-row.plan-moved'))) &&
+      /0820/.test(txt(document.querySelector('#planner-container .plan-row.plan-moved'))),
+      txt(document.querySelector('#planner-container .plan-row.plan-moved')));
     ok('pre-0700 trip flagged for permission',
-      document.querySelectorAll('#clash-container .clash-item.sev-perm').length === 1);
-    ok('unknown route counted as unchecked',
-      /not fully checked/.test(txt(document.querySelector('#clash-container .clash-head'))),
-      txt(document.querySelector('#clash-container .clash-head')));
-    ok('2359 trip shown as activation, not a clash',
-      /late-night activation/.test(txt(document.querySelector('#clash-container .clash-head'))),
-      txt(document.querySelector('#clash-container .clash-head')));
-    ok('date heading rendered', /MON 23\/11\/26/.test(txt(document.querySelector('#clash-container .clash-date'))),
-      txt(document.querySelector('#clash-container .clash-date')));
+      document.querySelectorAll('#planner-container .clash-item.sev-perm').length === 1);
+    ok('unknown route shown as SKIP row',
+      document.querySelectorAll('#planner-container .clash-item.sev-skip').length === 1);
+    ok('2359 trip shown as locked activation row',
+      document.querySelectorAll('#planner-container .clash-item.sev-activation').length === 1 &&
+      document.querySelector('#planner-container .clash-item.sev-activation').classList.contains('plan-locked'));
+    ok('day picker offers the planned day', /MON 23\/11\/26/.test(txt(document.getElementById('plan-day'))),
+      txt(document.getElementById('plan-day')));
 
     /* editing the TL text re-checks live: push the second trip past 0835 */
     var t = A.tlText().replace('0820 MTL - RHC 4 BUSES', '0830 MTL - RHC 4 BUSES');
     A.applyTLText(t);
-    ok('fixing the time clears the clash live',
-      document.querySelectorAll('#clash-container .clash-item.sev-red').length === 0 &&
-      txt(document.getElementById('btn-src-clash')).indexOf('·') === -1,
-      txt(document.getElementById('btn-src-clash')));
+    ok('fixing the time clears the clash live — nothing needs moving any more',
+      document.querySelectorAll('#planner-container .plan-row.plan-moved').length === 0 &&
+      txt(document.getElementById('btn-src-planner')).indexOf('·') === -1,
+      txt(document.getElementById('btn-src-planner')));
 
     localStorage.clear();
   } catch (e) {

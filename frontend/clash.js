@@ -410,11 +410,85 @@
     idxs.forEach(function (i) { buses[i].loc = dest; buses[i].free = s + d; });
   }
 
+  /* ------- day planner: minimal-fix respacing -------
+     Plan a day's trips in the given order, keeping each trip's current
+     time wherever it already works: a trip is pushed to the earliest
+     feasible slot only when its buses cannot be there in time, or when
+     it would fall before an earlier trip in the new order. The dragged
+     trip adopts its new slot instead of keeping its own time. Trips
+     that cannot be planned (unknown route, missing qty, over-fleet,
+     activation) are transparent: they keep their time and consume no
+     buses, so the blind spots stay visible.
+
+     trips: ordered [{id, timeStart, from, to, qty, drag}] — time is the
+     trip's current plan time, drag marks the trip just dragged.
+     Returns { plan: [{id, time, moved}], skipped: [ids] }. */
+  function respace(trips, opts) {
+    opts = opts || {};
+    var fleet = opts.fleet || FLEET;
+    var dayStart = typeof opts.dayStart === 'number' ? opts.dayStart : DAY_START;
+
+    var buses = [];
+    for (var i = 0; i < fleet; i++) buses.push({ loc: null, free: -1 });
+    var plan = [], skipped = [], prev = -1;
+
+    (trips || []).forEach(function (t) {
+      var s = toMin(t.timeStart);
+      var need = Math.round(+(t.qty === null || t.qty === undefined ? NaN : t.qty));
+      var d = s === null ? null : tripMinutes(t.from, t.to);
+      var isDrag = opts.drag === t.id;
+      /* locked (2359/TBC activation) trips and unplannable ones are
+         transparent: they keep their time, consume no buses and do not
+         constrain the trips after them */
+      if (t.lock || s === null || isNaN(need) || need <= 0 || d === null || need > fleet) {
+        plan.push({ id: t.id, time: t.timeStart, moved: false });
+        skipped.push(t.id);
+        return;
+      }
+
+      /* earliest the needed buses can be at the origin; a trip already
+         sanctioned before 0700 keeps its sanction — its buses are
+         assumed positioned overnight, beyond what the sim can see */
+      var pre = s < dayStart;
+      var feasible;
+      var chosen;
+      if (pre) {
+        feasible = 0;
+        chosen = buses.slice(0, Math.min(need, fleet)).map(function (b, idx) { return { idx: idx }; });
+      } else {
+        chosen = buses.map(function (b, idx) {
+          if (b.loc === null) return { idx: idx, ready: Math.max(b.free, dayStart) };
+          var dd = b.loc === canon(t.from) ? 0 : tripMinutes(b.loc, t.from);
+          return { idx: idx, ready: dd === null ? Infinity : Math.max(b.free, dayStart) + dd };
+        }).sort(function (a, b) { return a.ready - b.ready; }).slice(0, need);
+        if (chosen.some(function (c) { return c.ready === Infinity; })) {
+          plan.push({ id: t.id, time: t.timeStart, moved: false });
+          skipped.push(t.id);
+          return;
+        }
+        var readyMax = -1;
+        chosen.forEach(function (c) { if (c.ready > readyMax) readyMax = c.ready; });
+        feasible = Math.max(dayStart, readyMax);
+      }
+      var assigned = Math.max(isDrag ? -1 : s, prev, feasible);
+      chosen.forEach(function (c) {
+        buses[c.idx].loc = canon(t.to);
+        buses[c.idx].free = assigned + d;
+      });
+      plan.push({ id: t.id, time: hhmm(assigned), moved: assigned !== s });
+      prev = assigned;
+    });
+
+    return { plan: plan, skipped: skipped };
+  }
+
   window.TCRSClash = {
     analyze: analyze,
     normalizeLoc: normalizeLoc,
     canon: canon,
     tripMinutes: tripMinutes,
+    respace: respace,
+    toMin: toMin,
     FLEET: FLEET, DAY_START: DAY_START, GRACE_MIN: GRACE_MIN
   };
 })();
