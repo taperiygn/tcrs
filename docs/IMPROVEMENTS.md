@@ -50,6 +50,13 @@ User picked two new features: **3 · Month picker** and **5 · Edit history**. E
 - 2300 and earlier evening trips remain checked.
 - Real-data effect: reds 55 → 51, unchecked 65 → 51, 26 activation trips. Suite now 37 clash assertions; all three suites green (72 total).
 
+**2026-11-06 — Bus planner tab DONE** (commit 4eda701, live on Pages; replaces the Bus clashes tab):
+- Every bus trip of the selected day is listed — clean trips included — each with a badge from the fleet check run over the projected times: CLASH / TIGHT / PERMISSION / ACTIVATION / SKIP / OK. Day picker across all bus-trip days.
+- Drag-to-reorder (HTML5 DnD); after each drag the day re-spaces via `respace()` (pure engine in clash.js): minimal fix — entered times kept unless they would clash; the just-dragged trip adopts its new slot; order constraint enforced; pre-0700 sanctioned trips keep their sanction (buses assumed positioned overnight); transparent trips (unknown route, missing/over-fleet qty, 2359/TBC activation — locked, not draggable) keep their time, consume no buses, never block.
+- Draft/submit flow: working plan lives in memory; **Save draft** stores `{order, times}` per day as `busPlan` in the month's edits payload (backend + localStorage, like history); **Submit plan** surgically retimes `entry.timeStart` + entry `rawText` + matching `tlLines` text via `/^(\*?\s*)(\d{4}|TBC)(?=\s)/` — ids and prior edits survive; **Discard** drops the draft. Nothing reaches the schedule until Submit. Tab button shows `· draft`; head shows draft state.
+- Suites: clashtest updated to the preview-aware tab (38), new plantest (29) covering respace semantics + full drag/save/submit/discard flow; all four suites green (102 total).
+- Real-data check (busiest day 23/11, 25 timed trips): natural order moves 7 (the 0630 full-fleet trip genuinely pushes the 0700 to 0715); dragging the last trip to the front cascades minimal fixes that stabilize by midday.
+
 ---
 
 ## Tier 0 — Hazards to fix first (bugs / traps that bite you today)
