@@ -37,6 +37,14 @@ User picked two new features: **3 · Month picker** and **5 · Edit history**. E
 - Bus rows with a missing or zero qty flag **red** ("number of buses missing") and are left out of the simulation until filled in (user decision; commit cf2dc34).
 - Verified by `tests/clashtest.html` (23 assertions: sim + live tab); all three suites green (58 total).
 
+**2026-11-06 — Full trip-time matrix DONE** (commit 82bafdb, live on Pages; user provided `trplfttimes.xlsx`):
+- `tools/gen_trips.py` reads the 22×22 matrix (zipfile + ElementTree, stdlib only) and emits the `TRIPS` + `ALIAS` blocks — 20 canonical places, 190 pairs, plus hand-timed `RHC|S1: 15` (S1 is not in the matrix; S1↔163SQN and AMMO DUMP-RHC remain unchecked).
+- Grouped headers are the same place: HG RANGE/CCP 6 → 100M RANGE, CCP 8 → SITEST SITE 2, CCP 1/2 → FC SITE 1, CCP 3 → FC SITE 2, CCP 4/5 → FC SITE 3, CCP 7 → FC SITE 4, CCP 11 → EASTERN PIER, 300M RANGE → BIC RANGE (verified identical rows/columns), plus SIT SITE 1 → SITEST SITE 1 from live data. Corrects RHC↔FC SITE 6 to 20 min.
+- `canon()` folds aliases and is threaded through the whole simulation (bus positions, origin checks, deadheads); same-place trips take 0 min. Display strings stay `normalizeLoc`.
+- Trips needing a repositioning leg with no timing are skipped + counted, not red (was a false-alarm source); the deadhead scan tries other buses instead of giving up at the first unknown.
+- Real-data check over November (332 bus trips): 268 checked, 65 unchecked, 55 red / 13 orange / 3 perm.
+- Suite now 33 clash assertions; all three suites green (68 total).
+
 ---
 
 ## Tier 0 — Hazards to fix first (bugs / traps that bite you today)
