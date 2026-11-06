@@ -45,6 +45,11 @@ User picked two new features: **3 · Month picker** and **5 · Edit history**. E
 - Real-data check over November (332 bus trips): 268 checked, 65 unchecked, 55 red / 13 orange / 3 perm.
 - Suite now 33 clash assertions; all three suites green (68 total).
 
+**2026-11-06 — Late-night activation rule DONE** (commit 55ffcdf, live on Pages; user decision):
+- Trips starting at **2359 or TBC** are late-night bus activation (taken for a TBC spell) — pulled out of the simulation entirely, never red/orange, shown as their own count: "N late-night activation trips (2359/TBC) — buses activated, not checked".
+- 2300 and earlier evening trips remain checked.
+- Real-data effect: reds 55 → 51, unchecked 65 → 51, 26 activation trips. Suite now 37 clash assertions; all three suites green (72 total).
+
 ---
 
 ## Tier 0 — Hazards to fix first (bugs / traps that bite you today)
