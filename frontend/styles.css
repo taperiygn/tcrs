@@ -3,26 +3,26 @@
    Clean pastel — flat soft surfaces, hairline borders, gentle colour
    ===================================================================== */
 :root {
-  /* surfaces */
-  --bg: #f7f5fb;
+  /* surfaces — neutral greys dominate; colour is reserved for meaning */
+  --bg: #f7f7f8;
   --surface: #ffffff;
-  --surface-2: #fbfafd;
-  --line: #ebe7f3;
-  --line-strong: #ddd7ea;
+  --surface-2: #fafafa;
+  --line: #e9e9ee;
+  --line-strong: #d9d9e0;
 
   /* text */
-  --ink: #2d2a40;
-  --ink-soft: #66627f;
-  --ink-faint: #9a96b0;
+  --ink: #26262e;
+  --ink-soft: #5f5f6b;
+  --ink-faint: #97979f;
 
-  /* pastel fills + their readable text colours */
-  --lav: #e8e4fb;   --lav-ink: #5a4fb8;   --lav-deep: #cfc8f7;
-  --mint: #dff4ea;  --mint-ink: #2c7557;
-  --peach: #fde9dd; --peach-ink: #a9582f;
-  --sky: #dcedfa;   --sky-ink: #35698f;
-  --rose: #fbe1e7;  --rose-ink: #ad4660;
-  --butter: #fcf3d3; --butter-ink: #86650f;
-  --plum: #f2e3f7;  --plum-ink: #8a4a9e;
+  /* accent (interactive) + semantic tints, used sparingly */
+  --lav: #eceafb;   --lav-ink: #5548b8;   --lav-deep: #d4cdf6;
+  --mint: #e3f2e9;  --mint-ink: #2c7557;
+  --peach: #fdeee2; --peach-ink: #a9582f;
+  --sky: #e3eefa;   --sky-ink: #35698f;
+  --rose: #fbe5ea;  --rose-ink: #ad4660;
+  --butter: #faf1d0; --butter-ink: #86650f;
+  --plum: #f3e6f8;  --plum-ink: #8a4a9e;
 
   --accent: var(--lav-ink);
   --accent-soft: var(--lav);
@@ -32,10 +32,10 @@
 
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --sans: -apple-system, BlinkMacSystemFont, system-ui, "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
-  --shadow: 0 1px 2px rgba(80, 66, 140, .05), 0 6px 20px rgba(80, 66, 140, .06);
-  --shadow-lift: 0 2px 4px rgba(80, 66, 140, .06), 0 12px 30px rgba(80, 66, 140, .10);
-  --radius: 16px;
-  --radius-sm: 11px;
+  --shadow: 0 1px 2px rgba(24, 24, 36, .04), 0 4px 14px rgba(24, 24, 36, .05);
+  --shadow-lift: 0 2px 4px rgba(24, 24, 36, .05), 0 10px 26px rgba(24, 24, 36, .09);
+  --radius: 14px;
+  --radius-sm: 10px;
   --topbar-h: 64px;
   font-size: 15.5px;
 }
@@ -290,11 +290,11 @@ body.rail-collapsed .workspace { min-width: 0; }
   background: var(--surface); color: var(--ink-faint);
   font-variant-numeric: tabular-nums;
 }
-.chip:hover { border-color: #cfc8e2; color: var(--ink-soft); }
+.chip:hover { border-color: #c9c9d2; color: var(--ink-soft); }
 .chip.on {
-  color: var(--chip-c, var(--lav-ink));
-  border-color: transparent;
-  background: var(--chip-bg, var(--lav));
+  color: var(--ink);
+  border-color: var(--chip-c, var(--lav-ink));
+  background: var(--surface);
 }
 .hintline { font-size: 11.5px; color: var(--ink-faint); line-height: 1.5; margin: 6px 0 0; }
 
@@ -458,28 +458,25 @@ body.rail-collapsed .workspace { min-width: 0; }
 .empty .pn-t { font-size: 13.5px; font-weight: 700; letter-spacing: -0.01em; }
 .empty .pn-d { font-size: 11px; color: var(--ink-soft); line-height: 1.5; }
 
-.statsbar { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; margin-bottom: 18px; }
-.stat {
-  --tint: var(--lav); --tint-ink: var(--lav-ink);
-  background: var(--tint);
-  border-radius: var(--radius-sm);
-  padding: 14px 17px 12px;
-  transition: transform .16s ease;
+/* stats: one quiet strip of symbol + number — no coloured boxes.
+   Labels live in the tooltip / aria-label. */
+.statsbar {
+  display: flex; align-items: center; flex-wrap: wrap;
+  gap: 4px 26px;
+  padding: 10px 4px 14px;
+  margin-bottom: 4px;
 }
-.stat:hover { transform: translateY(-2px); }
-.stat:nth-child(2) { --tint: var(--peach); --tint-ink: var(--peach-ink); }
-.stat:nth-child(3) { --tint: var(--mint); --tint-ink: var(--mint-ink); }
-.stat:nth-child(4) { --tint: var(--sky); --tint-ink: var(--sky-ink); }
-.stat:nth-child(5) { --tint: var(--butter); --tint-ink: var(--butter-ink); }
-.stat.warn { --tint: var(--rose); --tint-ink: var(--rose-ink); }
-.stat .v {
-  font-size: 26px; font-weight: 800; font-variant-numeric: tabular-nums;
-  line-height: 1.05; letter-spacing: -0.04em; color: var(--tint-ink);
+.sitem {
+  display: inline-flex; align-items: center; gap: 7px;
+  color: var(--ink-soft);
 }
-.stat .k {
-  font-size: 10.5px; font-weight: 700; letter-spacing: .09em; color: var(--tint-ink); opacity: .75;
-  text-transform: uppercase; margin-top: 4px;
+.sitem .ic { color: var(--ink-faint); flex: 0 0 auto; }
+.sitem .v {
+  font-size: 17px; font-weight: 750; font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em; color: var(--ink); line-height: 1;
 }
+.sitem.warn { color: var(--butter-ink); }
+.sitem.warn .ic, .sitem.warn .v { color: var(--butter-ink); }
 
 .viewbar { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; flex-wrap: wrap; }
 .seg {
@@ -533,7 +530,7 @@ body.rail-collapsed .workspace { min-width: 0; }
 .chead {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
   padding: 11px 17px;
-  background: #faf8fe;
+  background: var(--surface-2);
   border-radius: var(--radius) var(--radius) 0 0;
   border-bottom: 1px solid var(--line);
   position: sticky; top: var(--topbar-h); z-index: 5;
@@ -542,14 +539,16 @@ body.rail-collapsed .workspace { min-width: 0; }
 .chead .dow { font-weight: 800; color: var(--lav-ink); font-size: 13px; letter-spacing: .07em; }
 .chead .dbig { font-weight: 800; font-size: 22px; color: var(--ink); letter-spacing: -0.03em; }
 .chead .dsub { color: var(--ink-soft); font-size: 12.5px; font-weight: 650; }
-.chead .cbadge {
-  font-size: 10.5px; font-weight: 700; padding: 3px 10px; border-radius: 999px;
-  background: var(--lav); color: var(--lav-ink);
-  white-space: nowrap; font-variant-numeric: tabular-nums;
+/* group counts: quiet symbol + number, no pills */
+.gstats { display: inline-flex; align-items: center; gap: 16px; margin-left: auto; color: var(--ink-soft); }
+.gstat {
+  display: inline-flex; align-items: center; gap: 5.5px;
+  font-size: 12.5px; font-weight: 700; font-variant-numeric: tabular-nums;
+  color: var(--ink-soft); white-space: nowrap;
 }
-.chead .cbadge.bus { background: var(--peach); color: var(--peach-ink); }
-.chead .cbadge.veh { background: var(--mint); color: var(--mint-ink); }
-.chead .cbadge.sens { background: var(--butter); color: var(--butter-ink); }
+.gstat .ic { color: var(--ink-faint); }
+.gstat.tbc { color: var(--butter-ink); }
+.gstat.tbc .ic { color: var(--butter-ink); }
 
 table.mov { width: 100%; border-collapse: collapse; font-size: 12.8px; }
 table.mov thead th {
@@ -574,27 +573,30 @@ table.mov .route { min-width: 150px; line-height: 1.4; }
 table.mov .route .arr { color: var(--ink-faint); padding: 0 5px; }
 table.mov .veh {
   font-family: var(--mono); font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums;
+  color: var(--ink); font-weight: 650;
 }
-table.mov .veh.bus { color: var(--peach-ink); font-weight: 700; }
-table.mov .veh.vehk { color: var(--mint-ink); font-weight: 700; }
 table.mov .poc { min-width: 130px; line-height: 1.4; }
 table.mov .poc .tel { display: block; font-size: 11px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
 table.mov .datecell { font-variant-numeric: tabular-nums; white-space: nowrap; }
 table.mov .datecell .dow { color: var(--lav-ink); font-weight: 700; margin-left: 6px; font-size: 11px; }
 
 .coychip {
-  display: inline-block; font-size: 10.5px; font-weight: 750; letter-spacing: .04em;
-  padding: 2.5px 9px; border-radius: 999px; margin: 1px 3px 1px 0;
-  background: var(--c-bg, var(--lav)); color: var(--c-c, var(--lav-ink));
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 10.5px; font-weight: 750; letter-spacing: .04em;
+  padding: 2.5px 10px; border-radius: 999px; margin: 1px 3px 1px 0;
+  background: var(--surface-2); border: 1px solid var(--line);
+  color: var(--ink-soft);
   font-variant-numeric: tabular-nums;
+}
+.coychip .dot, .chip .dot {
+  width: 7px; height: 7px; border-radius: 50%; flex: 0 0 7px;
+  display: inline-block;
 }
 .srcbadge {
   display: inline-block; font-size: 9.5px; font-weight: 750; letter-spacing: .08em;
   padding: 2px 7px; border-radius: 6px; vertical-align: 1px;
+  background: var(--surface-2); border: 1px solid var(--line); color: var(--ink-faint);
 }
-.srcbadge.icrf { background: var(--sky); color: var(--sky-ink); }
-.srcbadge.tl { background: var(--peach); color: var(--peach-ink); }
-.srcbadge.manual { background: var(--mint); color: var(--mint-ink); }
 .flagstar { color: var(--butter-ink); font-weight: 800; margin-left: 5px; }
 .tbctag { color: var(--butter-ink); background: var(--butter); border-radius: 5px; padding: 1px 6px; font-weight: 800; font-size: 10px; }
 .ghostnote { color: var(--ink-faint); font-style: italic; }
@@ -841,7 +843,6 @@ table.mov .datecell .dow { color: var(--lav-ink); font-weight: 700; margin-left:
   #rail-toggle { display: none; }
   body.rail-collapsed .rail > :not(#rail-toggle) { display: revert; }
   body.rail-collapsed .rail { min-height: auto; }
-  .statsbar { grid-template-columns: repeat(3, 1fr); }
   .topbar-inner { flex-wrap: wrap; height: auto; padding: 12px 18px; row-gap: 10px; }
   .topbtns { flex-wrap: wrap; }
   .chead { position: static; }
@@ -849,8 +850,8 @@ table.mov .datecell .dow { color: var(--lav-ink); font-weight: 700; margin-left:
   .sheet-scroll { max-height: 70vh; }
 }
 @media (max-width: 640px) {
-  .statsbar { grid-template-columns: repeat(2, 1fr); }
   .layout { padding: 16px 14px 50px; }
+  .statsbar { gap: 4px 18px; }
 }
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }

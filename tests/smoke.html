@@ -44,7 +44,7 @@
     localStorage.clear();
 
     ok('model built', !!A.state.model, 'no model');
-    ok('stats populated', !!document.querySelector('#statsbar .stat .v'), 'empty');
+    ok('stats populated', !!document.querySelector('#statsbar .sitem .v'), 'empty');
     ok('month banner title', txt(document.getElementById('mb-title')).indexOf('NOVEMBER 2026') > -1,
       txt(document.getElementById('mb-title')));
     ok('roster chips: 7 companies + SCHWIDE (inactive 2ND/3RD shown)',

@@ -1551,8 +1551,8 @@
       var b = document.createElement('span');
       b.className = 'chip' + (on ? ' on' : '');
       b.style.setProperty('--chip-c', st.cc);
-      b.style.setProperty('--chip-bg', st.cb);
-      b.textContent = c === 'SCHWIDE' ? 'SCHWIDE' : c + ' Coy';
+      b.innerHTML = '<i class="dot" style="background:' + st.cc + '"></i>' +
+        esc(c === 'SCHWIDE' ? 'SCHWIDE' : c + ' Coy');
       b.dataset.coy = c;
       b.addEventListener('click', function () {
         if (b.classList.contains('on')) {
@@ -1984,25 +1984,54 @@
     return { movements: s.movements, buses: s.buses, veh: s.veh, groups: s.coys.size, days: s.days.size, flags: s.flags, tbc: s.tbc };
   }
 
+  /* tiny stroke icon set (inline SVG, currentColor) — replaces the old
+     labelled colour boxes with symbol + number */
+  var ICONS = {
+    mov: '<path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h7"/>',
+    bus: '<rect x="2" y="3" width="12" height="8.5" rx="2"/><path d="M2 7.2h12"/><circle cx="5.2" cy="13" r="1.2"/><circle cx="10.8" cy="13" r="1.2"/>',
+    veh: '<rect x="1.5" y="4" width="8" height="6.5" rx="1"/><path d="M9.5 6h3.2l1.8 2.6v1.9h-5"/><circle cx="4.5" cy="12.5" r="1.2"/><circle cx="11.5" cy="12.5" r="1.2"/>',
+    coy: '<path d="M3 1.8v12.4"/><path d="M3 2.8h8.5L9.7 5.5l1.8 2.7H3"/>',
+    day: '<rect x="2" y="3" width="12" height="11" rx="2"/><path d="M2 6.5h12M5.5 1.5v3M10.5 1.5v3"/>',
+    warn: '<path d="M8 2.2 14.3 13.2H1.7L8 2.2z"/><path d="M8 6.6v3M8 11.5h.01"/>',
+    clock: '<circle cx="8" cy="8" r="6.2"/><path d="M8 4.6V8l2.3 1.7"/>'
+  };
+  function svgIcon(name) {
+    return '<svg class="ic" viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" ' +
+      'stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      (ICONS[name] || '') + '</svg>';
+  }
+
   function renderStats(list) {
     var s = statsFor(list || filteredEntries());
     var warn = s.flags + s.tbc;
-    $('statsbar').innerHTML =
-      stat(s.movements, 'Movements', '') +
-      stat(s.buses, 'Buses needed', 'bus') +
-      stat(s.veh, 'Own vehicles', 'veh') +
-      stat(s.groups, 'Companies', '') +
-      stat(s.days, 'Days covered', '') +
-      stat(warn, 'Flagged / TBC', warn > 0 ? 'warn' : '');
-    function stat(v, k, cls) {
-      return '<div class="stat ' + cls + '"><div class="v">' + v + '</div><div class="k">' + k + '</div></div>';
-    }
+    var items = [
+      ['mov', s.movements, 'Movements', ''],
+      ['bus', s.buses, 'Buses needed', ''],
+      ['veh', s.veh, 'Own vehicles', ''],
+      ['coy', s.groups, 'Companies', ''],
+      ['day', s.days, 'Days covered', '']
+    ];
+    if (warn) items.push(['warn', warn, 'Flagged / TBC', 'warn']);
+    $('statsbar').innerHTML = items.map(function (it) {
+      return '<span class="sitem ' + it[3] + '" title="' + it[2] + '" aria-label="' + it[2] + ': ' + it[1] + '">' +
+        svgIcon(it[0]) + '<span class="v">' + it[1] + '</span></span>';
+    }).join('');
+  }
+
+  /* neutral icon+count cluster for group headers (replaces coloured pills) */
+  function gstatsHTML(n, buses, veh, tbc) {
+    return '<span class="gstats">' +
+      '<span class="gstat" title="' + n + ' movements">' + svgIcon('mov') + n + '</span>' +
+      (buses ? '<span class="gstat" title="' + buses + ' buses">' + svgIcon('bus') + buses + '</span>' : '') +
+      (veh ? '<span class="gstat" title="' + veh + ' own vehicles">' + svgIcon('veh') + veh + '</span>' : '') +
+      (tbc ? '<span class="gstat tbc" title="timing TBC">' + svgIcon('clock') + 'TBC</span>' : '') +
+      '</span>';
   }
 
   function coyChipsHTML(coys) {
     return coys.map(function (c) {
       var st = coyStyle(c);
-      return '<span class="coychip" style="--c-c:' + st.cc + ';--c-bg:' + st.cb + '">' + esc(c) + '</span>';
+      return '<span class="coychip"><i class="dot" style="background:' + st.cc + '"></i>' + esc(c) + '</span>';
     }).join('');
   }
 
@@ -2100,10 +2129,7 @@
           '<div class="chead"><div class="dateline"><span class="dow">' + esc(T.dowOf(d)) + '</span>' +
           '<span class="dbig">' + esc(d.slice(8)) + '</span><span class="dsub">' +
           esc(monthShort(d)) + ' ' + esc(state.model.year) + '</span></div>' +
-          '<span class="cbadge">' + list.length + ' movements</span>' +
-          (buses ? '<span class="cbadge bus">' + buses + ' buses</span>' : '') +
-          (veh ? '<span class="cbadge veh">' + veh + ' own veh</span>' : '') +
-          (tbc ? '<span class="cbadge sens">timing TBC</span>' : '') +
+          gstatsHTML(list.length, buses, veh, !!tbc) +
           '</div>' +
           '<table class="mov">' + tableHead('date', poc) + '<tbody>' +
           list.map(function (e) { return '<tr>' + rowCells(e, 'date', poc) + '</tr>'; }).join('') +
@@ -2125,11 +2151,9 @@
         sec.className = 'group';
         sec.innerHTML =
           '<div class="chead"><div class="dateline">' +
-          '<span class="coychip" style="--c-c:' + st.cc + ';--c-bg:' + st.cb + ';font-size:13px;padding:4px 12px">' + esc(coy) + '</span>' +
+          '<span class="coychip" style="font-size:13px;padding:4px 12px"><i class="dot" style="background:' + st.cc + '"></i>' + esc(coy) + '</span>' +
           '<span class="dsub">' + (coy === 'SCHWIDE' ? 'School-wide movements' : esc(coy) + ' Coy') + '</span></div>' +
-          '<span class="cbadge">' + list.length + ' movements</span>' +
-          (buses ? '<span class="cbadge bus">' + buses + ' bus pax-slots</span>' : '') +
-          (veh ? '<span class="cbadge veh">' + veh + ' own veh</span>' : '') +
+          gstatsHTML(list.length, buses, veh, false) +
           '</div>' +
           '<table class="mov">' + tableHead('coy', poc) + '<tbody>' +
           list.map(function (e) { return '<tr>' + rowCells(e, 'coy', poc) + '</tr>'; }).join('') +
