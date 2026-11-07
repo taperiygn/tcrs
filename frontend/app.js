@@ -363,10 +363,71 @@
   }
 
   /* -- loading -- */
+  /* Saved records come from localStorage or the server; either may hold data
+     written by an older build or mangled by hand. Each collection is checked
+     and malformed pieces are dropped — a month with one corrupt row still
+     loads, and nothing untrusted ever reaches state. */
+  function validateSaved(rec) {
+    if (!rec || typeof rec !== 'object' || Array.isArray(rec)) return null;
+    var str = function (v) { return typeof v === 'string' && v.length > 0; };
+    var out = {
+      v: 3, hasEdits: false,
+      updatedAt: typeof rec.updatedAt === 'string' ? rec.updatedAt : '',
+      entries: [], tlLines: [], skipped: [], history: [], busPlan: {},
+      opts: (rec.opts && typeof rec.opts === 'object' && !Array.isArray(rec.opts)) ? rec.opts : null
+    };
+    if (rec._remote) out._remote = true;
+
+    if (Array.isArray(rec.entries)) {
+      out.entries = rec.entries.filter(function (e) {
+        return e && typeof e === 'object' && !Array.isArray(e) && str(e.id);
+      });
+    }
+    out.hasEdits = out.entries.length > 0;
+
+    if (Array.isArray(rec.tlLines)) {
+      out.tlLines = rec.tlLines.filter(function (l) {
+        return l && typeof l === 'object' && !Array.isArray(l) &&
+          (l.kind === 'line' || l.kind === 'date' || l.kind === 'title');
+      });
+    }
+    if (Array.isArray(rec.skipped)) {
+      out.skipped = rec.skipped.filter(function (s) {
+        return s && typeof s === 'object' && !Array.isArray(s);
+      });
+    }
+    if (Array.isArray(rec.history)) {
+      out.history = rec.history.filter(function (h) {
+        return h && typeof h === 'object' && !Array.isArray(h) && typeof h.text === 'string';
+      });
+    }
+    if (rec.busPlan && typeof rec.busPlan === 'object' && !Array.isArray(rec.busPlan)) {
+      Object.keys(rec.busPlan).forEach(function (day) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return;
+        var d = rec.busPlan[day];
+        if (!d || typeof d !== 'object' || Array.isArray(d) || !Array.isArray(d.order)) return;
+        var order = d.order.filter(str);
+        if (!order.length) return;
+        var times = {};
+        if (d.times && typeof d.times === 'object' && !Array.isArray(d.times)) {
+          Object.keys(d.times).forEach(function (id) {
+            var t = d.times[id];
+            if (str(id) && (t === 'TBC' || /^\d{4}$/.test(String(t)))) times[id] = String(t);
+          });
+        }
+        out.busPlan[day] = { order: order, times: times, auto: !!d.auto };
+      });
+    }
+    return out;
+  }
+
   function readLocal(key) {          // key = month key, e.g. '11-2026' (school prefix tolerated)
     try {
       var d = JSON.parse(lsGet(storeKey(key)) || 'null');
-      if (d && d.v === 3 && Array.isArray(d.entries)) { d.hasEdits = d.entries.length > 0; return d; }
+      if (d && d.v === 3) {
+        var rec = validateSaved(d);
+        if (rec) { rec.hasEdits = rec.entries.length > 0; return rec; }
+      }
     } catch (e) { }
     return null;
   }
@@ -374,13 +435,13 @@
     var rec = remote.doc && remote.doc.months && remote.doc.months[key];
     if (!rec) return null;
     var ed = rec.edits, has = !!(ed && Array.isArray(ed.entries) && ed.entries.length);
-    return {
-      v: 3, hasEdits: has, updatedAt: (ed && ed.updatedAt) || rec.savedAt,
+    return validateSaved({
+      v: 3, updatedAt: (ed && ed.updatedAt) || rec.savedAt,
       entries: has ? ed.entries : [], tlLines: has ? ed.tlLines : [], skipped: has ? ed.skipped : [],
       history: (ed && Array.isArray(ed.history)) ? ed.history : [],
       busPlan: (ed && ed.busPlan && typeof ed.busPlan === 'object' && !Array.isArray(ed.busPlan)) ? ed.busPlan : {},
       opts: rec.opts, _remote: true
-    };
+    });
   }
   function loadStore() {            // newest of server vs this device
     var key = monthKey();
@@ -2576,6 +2637,7 @@
     renderUploadStatus: renderUploadStatus,
     handleFile: handleFile, restoreWorkspace: restoreWorkspace,
     chosenSheet: chosenSheet, sheetPickerHtml: sheetPickerHtml,
-    applySheetData: applySheetData, pushHistory: pushHistory
+    applySheetData: applySheetData, pushHistory: pushHistory,
+    validateSaved: validateSaved, readLocal: readLocal
   };
 })();

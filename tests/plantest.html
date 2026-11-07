@@ -236,6 +236,65 @@
     failures++;
     out.push('CRASH(B) ' + (e && e.stack || e));
   }
+
+  /* ---------- part C: saved-record shape validation ---------- */
+  try {
+    var V = A.validateSaved;
+    var good = V({ v: 3, updatedAt: 'x', entries: [{ id: 't1' }], tlLines: [{ kind: 'line', text: 'y' }],
+                   skipped: [{ row: 1 }], history: [{ at: 'a', src: 'edit', text: 'b' }],
+                   busPlan: { '2026-11-23': { order: ['t1'], times: { t1: '0850' }, auto: true } } });
+    ok('a well-formed record passes through intact',
+      !!good && good.entries.length === 1 && good.tlLines.length === 1 && good.skipped.length === 1 &&
+      good.history.length === 1 && good.busPlan['2026-11-23'].auto === true &&
+      good.busPlan['2026-11-23'].times.t1 === '0850');
+
+    var dirty = V({
+      v: 3,
+      entries: [{ id: 't1' }, null, 'junk', 42, { nope: 1 }, { id: '' }, { id: 'i2' }],
+      tlLines: [{ kind: 'line' }, { kind: 'weird' }, 'x', null, { kind: 'date', date: '2026-11-23' }],
+      skipped: [{ row: 1 }, 'bad', 7],
+      history: [{ text: 'ok' }, { noText: 1 }, 'junk', null],
+      busPlan: {
+        '2026-11-23': { order: ['t1', null, 'i2'], times: { t1: '0850', bad: '8:5', t9: 'TBC' }, auto: 1 },
+        'not-a-day': { order: ['t1'] },
+        '2026-11-24': { order: [] },                     // empty order → dropped
+        '2026-11-25': null
+      }
+    });
+    ok('malformed entries are dropped, well-formed ones kept',
+      dirty.entries.length === 2 && dirty.entries[0].id === 't1' && dirty.entries[1].id === 'i2',
+      JSON.stringify(dirty.entries));
+    ok('tlLines keeps only known kinds', dirty.tlLines.length === 2 &&
+      dirty.tlLines[0].kind === 'line' && dirty.tlLines[1].kind === 'date');
+    ok('skipped and history are filtered the same way',
+      dirty.skipped.length === 1 && dirty.history.length === 1 && dirty.history[0].text === 'ok');
+    ok('busPlan: bad day keys, empty orders and junk times are stripped',
+      Object.keys(dirty.busPlan).length === 1 &&
+      JSON.stringify(dirty.busPlan['2026-11-23'].order) === '["t1","i2"]' &&
+      dirty.busPlan['2026-11-23'].times.t1 === '0850' &&
+      dirty.busPlan['2026-11-23'].times.t9 === 'TBC' &&
+      !('bad' in dirty.busPlan['2026-11-23'].times) &&
+      dirty.busPlan['2026-11-23'].auto === true,
+      JSON.stringify(dirty.busPlan));
+    ok('an empty entries list means no edits, garbage in / null out',
+      V({ entries: [{ id: 't1' }] }).hasEdits === true &&
+      V({ entries: [] }).hasEdits === false &&
+      V(null) === null && V('x') === null && V([]) === null && V({}) !== null);
+
+    /* readLocal goes through the same gate */
+    localStorage.setItem('tcrs:v3:s4:11-2026', JSON.stringify({
+      v: 3, updatedAt: 'z', entries: [{ id: 't1' }, { corrupt: true }],
+      tlLines: [], skipped: [], history: [], busPlan: {}
+    }));
+    var rl = A.readLocal('11-2026');
+    ok('readLocal validates — corrupt entries dropped before they reach state',
+      !!rl && rl.entries.length === 1 && rl.entries[0].id === 't1' && rl.hasEdits === true,
+      JSON.stringify(rl && rl.entries));
+    localStorage.clear();
+  } catch (e) {
+    failures++;
+    out.push('CRASH(C) ' + (e && e.stack || e));
+  }
   log();
   document.title = failures ? 'PLAN FAILED' : 'PLAN OK';
 })();
