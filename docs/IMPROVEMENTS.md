@@ -71,6 +71,12 @@ User picked two new features: **3 · Month picker** and **5 · Edit history**. E
 - Suites: plantest 39 (new part C), clashtest 39, sheetsel 17, histtest 18 = **113 assertions green**; server tests pass; Pages deploy green, `validateSaved` live.
 - Not built (user declined): store/reducer state mgmt, view-model split, sync-model refactor, backend split, security centralization, route helpers, TypeScript, build step.
 
+**2026-11-07 — UI refresh DONE** (commit 4269d06, live on Pages; user request):
+- The six coloured stat boxes (movements / buses needed / own vehicles / companies / days / flagged-TBC) replaced by one quiet strip of inline-SVG symbol + number; labels live in tooltips/aria-labels. Same treatment for the day/company header pills ('7 movements', '17 buses', '3 own veh', 'timing TBC').
+- Company filter/route chips swap pastel fills for neutral chips with a small coloured identity dot; table vehicle columns and ICRF/TL/manual source badges drop their colours for neutral ink.
+- Palette per Refactoring UI (grey-dominant, one accent, semantic colour sparingly): neutral backgrounds/lines/shadows, violet kept for interactive elements, semantic tints only for clash/activation/TBC/status.
+- Verified via a headless-Chrome screenshot harness (schedule, company, planner views) plus all four suites green (113 assertions).
+
 ---
 
 ## Tier 0 — Hazards to fix first (bugs / traps that bite you today)
