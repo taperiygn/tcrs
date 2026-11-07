@@ -77,6 +77,12 @@ User picked two new features: **3 · Month picker** and **5 · Edit history**. E
 - Palette per Refactoring UI (grey-dominant, one accent, semantic colour sparingly): neutral backgrounds/lines/shadows, violet kept for interactive elements, semantic tints only for clash/activation/TBC/status.
 - Verified via a headless-Chrome screenshot harness (schedule, company, planner views) plus all four suites green (113 assertions).
 
+**2026-11-07 — Palette re-theme DONE** (commit 31ca88a, live on Pages; user-specified tokens):
+- Base #F4F1EA page / Surface #E3E5DA cards / Primary #5F7A6A sage (buttons, tabs, toggles, focus) / Accent #C9A47E family (troop-lift + bus tints) / Spot #9DB4C0 (ICRF info + activation blue) / Text #2E3A33.
+- Semantic tints derived from the palette: clash terracotta, tight/TBC amber, ok primary-green, activation/permission spot-blue; company identity cycle re-toned to earthy hues; purple shadows/glows → warm olive-grey; inputs/menus/cells on warm paper (#FBFAF4) instead of stark white; login page + favicon match.
+
+**Known issue (pre-existing):** tests/smoke.html no longer runs — it expects the sample workbook fixtures that were intentionally removed from the repo (0e6b20f) and now reports SMOKE FAILED at "model built". Not caused by recent work; needs a decision (restore fixtures without committing them, grid-delete the suite, or drive it to build data like plantest does).
+
 ---
 
 ## Tier 0 — Hazards to fix first (bugs / traps that bite you today)
