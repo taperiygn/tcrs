@@ -40,15 +40,15 @@
   /* Pastel palette, applied by roster order; school 4 keeps its established
      colours, letter schools cycle through the same fills. */
   var COY_FILL_CYCLE = [
-    ['#86650f', '#fcf3d3'], ['#4f5f8a', '#e3e8f6'], ['#a9582f', '#fde9dd'],
-    ['#ad4660', '#fbe1e7'], ['#2c7557', '#dff4ea'], ['#35698f', '#dcedfa'],
-    ['#5a4fb8', '#e8e4fb'], ['#8a5470', '#f6e2ee']
+    ['#86681F', '#F0E6C9'], ['#6B4F3A', '#EDE0D2'], ['#9C4A2F', '#EFD9CE'],
+    ['#4C7086', '#E0E9EC'], ['#47614E', '#E2E8DE'], ['#5F7A6A', '#DCE5DC'],
+    ['#3E6275', '#DCE7EE'], ['#7A6A55', '#EAE4D6']
   ];
   var COY_COLORS = {
     '1ST': COY_FILL_CYCLE[0], '2ND': COY_FILL_CYCLE[1], '3RD': COY_FILL_CYCLE[2],
     '4TH': COY_FILL_CYCLE[3], '5TH': COY_FILL_CYCLE[4], '6TH': COY_FILL_CYCLE[5],
     '7TH': COY_FILL_CYCLE[6],
-    'SCHWIDE': ['#56606e', '#e8ebf0']
+    'SCHWIDE': ['#57655A', '#E4E7DC']
   };
   function coyStyle(c) {
     var p = COY_COLORS[c];

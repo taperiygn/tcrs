@@ -2,41 +2,41 @@
 html, body { margin: 0; height: 100%; }
 body {
   font-family: -apple-system, BlinkMacSystemFont, system-ui, "Segoe UI", Helvetica, Arial, sans-serif;
-  background: #f7f5fb; color: #2d2a40; -webkit-font-smoothing: antialiased;
+  background: #F4F1EA; color: #2E3A33; -webkit-font-smoothing: antialiased;
   display: grid; place-items: center; padding: 20px;
 }
 .login {
-  width: 100%; max-width: 380px; background: #fff; border: 1px solid #ebe7f3;
-  border-radius: 20px; padding: 34px 30px 30px; text-align: center;
-  box-shadow: 0 1px 2px rgba(80,66,140,.05), 0 12px 36px rgba(80,66,140,.08);
+  width: 100%; max-width: 380px; background: #E3E5DA; border: 1px solid #D6D9CB;
+  border-radius: 18px; padding: 34px 30px 30px; text-align: center;
+  box-shadow: 0 1px 2px rgba(46,58,51,.05), 0 12px 36px rgba(46,58,51,.09);
 }
 .mark {
   width: 52px; height: 52px; border-radius: 16px; margin: 0 auto 16px;
-  background: #cfc8f7; color: #2b2560; font-weight: 800; font-size: 17px;
+  background: #5F7A6A; color: #F4F1EA; font-weight: 800; font-size: 17px;
   display: grid; place-items: center;
 }
 h1 { font-size: 20px; margin: 0 0 6px; letter-spacing: -0.02em; }
-.sub { margin: 0 0 22px; color: #66627f; font-size: 14px; }
+.sub { margin: 0 0 22px; color: #576559; font-size: 14px; }
 form { text-align: left; }
-label { display: block; font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #9a96b0; margin-bottom: 7px; }
+label { display: block; font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #8B978B; margin-bottom: 7px; }
 input[type=password] {
   width: 100%; font: inherit; font-size: 15px; padding: 11px 14px; color: inherit;
-  border: 1px solid #ddd7ea; border-radius: 11px; outline: none; background: #fbfafd;
+  border: 1px solid #C2C6B4; border-radius: 11px; outline: none; background: #FBFAF4;
 }
-input[type=password]:focus { border-color: #5a4fb8; box-shadow: 0 0 0 3px #e8e4fb; background: #fff; }
-.msg { min-height: 20px; margin: 10px 0 4px; font-size: 13px; color: #ad4660; }
+input[type=password]:focus { border-color: #5F7A6A; box-shadow: 0 0 0 3px rgba(95,122,106,.22); background: #FBFAF4; }
+.msg { min-height: 20px; margin: 10px 0 4px; font-size: 13px; color: #9C4A2F; }
 button {
   width: 100%; font: inherit; font-weight: 650; font-size: 14px; padding: 11px; cursor: pointer;
-  border: none; border-radius: 11px; background: #cfc8f7; color: #2b2560; transition: background .15s;
+  border: none; border-radius: 11px; background: #5F7A6A; color: #F4F1EA; transition: background .15s;
 }
-button:hover:not(:disabled) { background: #c2b9f3; }
+button:hover:not(:disabled) { background: #4A6354; }
 button:disabled { opacity: .6; cursor: wait; }
-button:focus-visible { outline: 2px solid #5a4fb8; outline-offset: 2px; }
+button:focus-visible { outline: 2px solid #5F7A6A; outline-offset: 2px; }
 .tunnel { margin: 22px 0 0; text-align: left; }
-.t-label { font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #9a96b0; margin-bottom: 7px; }
+.t-label { font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #8B978B; margin-bottom: 7px; }
 .t-url {
   display: block; width: 100%; text-align: left; font: inherit; font-size: 13px; font-weight: 650;
-  color: #4b3a91; background: #f1eefb; border: 1px dashed #cfc8f7; border-radius: 10px;
+  color: #4C7086; background: #E0E9EC; border: 1px dashed #9DB4C0; border-radius: 10px;
   padding: 9px 12px; word-break: break-all; line-height: 1.35; cursor: pointer;
 }
-.t-url:hover { background: #e8e4fb; }
+.t-url:hover { background: #D5E2E7; }
