@@ -64,6 +64,13 @@ User picked two new features: **3 · Month picker** and **5 · Edit history**. E
 - Suites: plantest 32 (toggle semantics: auto-off drag keeps times, auto-on pushes), clashtest 39; all four suites green (106 total).
 - Real-data check (all November, auto on everywhere): 20 days, 306 timed trips — 72 would move, 63 skipped; confirms the per-day opt-in default.
 
+**2026-11-07 — Architecture safe subset DONE** (commits 10bd7ae, cd9811f, 75ed325; all live):
+- **Dedupe** (10bd7ae): deleted the stale root frontend copies (app.js/index.html/login/styles/parser/sheet/config — root app.js predated the planner by hundreds of lines), the full `dist/` snapshot, `vendor/`, and the dead root `Dockerfile` (referenced a nonexistent `samples/`; Cloud Build uses `backend/Dockerfile`). Root `server.py` wrapper now defaults `TCRS_SITE_DIR` to `frontend/` (cd9811f) so local runs and tests serve the canonical copy. `render.yaml` (pre-Cloud-Run Render blueprint) **kept** pending a call; `reference_parse.py` kept as the test reference.
+- **Docs**: `docs/PARSER_RULES.md` (school/company mapping, month-detection precedence, day/month swap fix, TL line grammar, manual-edit merge rules) and `docs/ARCHITECTURE.md` (layer map, storage schema contract, sync model: edits payload / revisions / 409 conflict / newest-wins load / rollback).
+- **Runtime shape validation**: `validateSaved()` gates every record read from localStorage or the server — entries need string ids, tlLines only known kinds, history needs text, busPlan checked per day; malformed pieces are dropped, never fatal. Exported for tests; real November record verified fully well-formed (validation drops nothing on real data).
+- Suites: plantest 39 (new part C), clashtest 39, sheetsel 17, histtest 18 = **113 assertions green**; server tests pass; Pages deploy green, `validateSaved` live.
+- Not built (user declined): store/reducer state mgmt, view-model split, sync-model refactor, backend split, security centralization, route helpers, TypeScript, build step.
+
 ---
 
 ## Tier 0 — Hazards to fix first (bugs / traps that bite you today)
