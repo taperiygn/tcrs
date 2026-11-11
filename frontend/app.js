@@ -1984,6 +1984,15 @@
     return { movements: s.movements, buses: s.buses, veh: s.veh, groups: s.coys.size, days: s.days.size, flags: s.flags, tbc: s.tbc };
   }
 
+  /* per-company colour wash for schedule rows — the company's own tint at
+     ~65% alpha over the sage card, so each row carries its colour. Used
+     when the row's company is unambiguous (single coy, or the group coy). */
+  function rowWash(coys, coy) {
+    var c = coy || (coys && coys.length === 1 ? coys[0] : null);
+    if (!c) return '';
+    return ' style="background:' + coyStyle(c).cb + 'A6"';
+  }
+
   /* tiny stroke icon set (inline SVG, currentColor) — replaces the old
      labelled colour boxes with symbol + number */
   var ICONS = {
@@ -2132,7 +2141,7 @@
           gstatsHTML(list.length, buses, veh, !!tbc) +
           '</div>' +
           '<table class="mov">' + tableHead('date', poc) + '<tbody>' +
-          list.map(function (e) { return '<tr>' + rowCells(e, 'date', poc) + '</tr>'; }).join('') +
+          list.map(function (e) { return '<tr' + rowWash(e.coys) + '>' + rowCells(e, 'date', poc) + '</tr>'; }).join('') +
           '</tbody></table>';
         c.appendChild(sec);
       });
@@ -2150,13 +2159,13 @@
         var sec = document.createElement('section');
         sec.className = 'group';
         sec.innerHTML =
-          '<div class="chead"><div class="dateline">' +
-          '<span class="coychip" style="font-size:13px;padding:4px 12px"><i class="dot" style="background:' + st.cc + '"></i>' + esc(coy) + '</span>' +
+          '<div class="chead" style="background:' + st.cb + '"><div class="dateline">' +
+          '<span class="coychip" style="font-size:13px;padding:4px 12px;background:var(--paper)"><i class="dot" style="background:' + st.cc + '"></i>' + esc(coy) + '</span>' +
           '<span class="dsub">' + (coy === 'SCHWIDE' ? 'School-wide movements' : esc(coy) + ' Coy') + '</span></div>' +
           gstatsHTML(list.length, buses, veh, false) +
           '</div>' +
           '<table class="mov">' + tableHead('coy', poc) + '<tbody>' +
-          list.map(function (e) { return '<tr>' + rowCells(e, 'coy', poc) + '</tr>'; }).join('') +
+          list.map(function (e) { return '<tr' + rowWash(null, coy) + '>' + rowCells(e, 'coy', poc) + '</tr>'; }).join('') +
           '</tbody></table>';
         c.appendChild(sec);
       });

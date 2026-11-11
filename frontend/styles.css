@@ -537,7 +537,7 @@ body.rail-collapsed .workspace { min-width: 0; }
 .chead {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
   padding: 11px 17px;
-  background: var(--surface-2);
+  background: linear-gradient(90deg, rgba(95, 122, 106, .32), rgba(95, 122, 106, .12));
   border-radius: var(--radius) var(--radius) 0 0;
   border-bottom: 1px solid var(--line);
   position: sticky; top: var(--topbar-h); z-index: 5;
