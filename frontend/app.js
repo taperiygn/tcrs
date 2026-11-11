@@ -2581,6 +2581,22 @@
       '<span class="st">🚚 ' + veh + '</span>';
   }
 
+  /* ------------------------------------------------------- tap sound -- */
+  /* one short tap.mp3 tick on every click; cloned per click so fast
+     repeated clicks overlap instead of cutting each other off */
+  var tapAudio = null;
+  function playTap() {
+    try {
+      if (!tapAudio) tapAudio = new Audio('tap.mp3');
+      var a = tapAudio.cloneNode();
+      a.volume = 0.4;
+      a.play().catch(function () { });
+    } catch (e) { }
+  }
+  function initTapSound() {
+    document.addEventListener('click', playTap, true);
+  }
+
   (function () {
     var saved = parseInt(lsGet('tcrs:school'), 10);
     if (saved >= 1 && saved <= 4 && !/^#auto/.test(location.hash)) state.school = saved;
@@ -2588,6 +2604,7 @@
   init();
   initSchoolMenu();
   initOverlays();
+  initTapSound();
   applySchoolTexts();
   setTab(state.tab);   // sync visibility with the (possibly hash-set) tab
   syncControls();

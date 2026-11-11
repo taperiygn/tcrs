@@ -1,4 +1,15 @@
 (function () {
+  /* tap sound on every click (same tick as the builder app) */
+  var tapAudio = null;
+  document.addEventListener('click', function () {
+    try {
+      if (!tapAudio) tapAudio = new Audio('tap.mp3');
+      var a = tapAudio.cloneNode();
+      a.volume = 0.4;
+      a.play().catch(function () { });
+    } catch (e) { }
+  }, true);
+
   /* current public tunnel link (injected by the server when the tunnel is up) */
   var tunnel = window.__TCRS_TUNNEL;
   if (tunnel) {

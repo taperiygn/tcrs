@@ -102,6 +102,11 @@ User picked two new features: **3 · Month picker** and **5 · Edit history**. E
 - Print styles disable pools/panes/overlays and restore opaque paper backgrounds; prefers-reduced-motion already kills the slides.
 - Verified via the palette/overlay tryout harness + real-app screenshots; all four suites green (113 assertions); server tests pass.
 
+**2026-11-11 — Tap sound + clearer, more refractive glass DONE**:
+- tap.mp3 (18KB) moved into `frontend/` and played on every click in the app and the login page — a dedicated `::before` frost layer, cloned `Audio` per click so fast taps overlap; volume 0.4; errors silently ignored (no sound if the file 404s).
+- Glass re-tuned per user feedback ("more transparent, more refractive"): pane tint lowered .42→.22 (cards), .50→.28 (day headers), .55→.30 (modal), .48→.26 (dock), .42→.24 (login); saturation 180%→215% (+brightness 1.05) so the ambient pools glow more vividly through the panes; brighter rim (border rgba .55→.72), stronger dual corner bevels, thin inner edge ring, and a diagonal light sheen baked into each pane for the refraction feel.
+- All four suites green (113 assertions); server tests pass.
+
 **2026-11-07 — Colour punch pass DONE** (commit 0b8a9db, live on Pages; user asked for the suggested "more punch"):
 - Day-group headers: deeper sage gradient band (fading left→right); in the by-company view the band takes the company's own tint with the chip on paper.
 - Schedule rows washed with the company's tint at 65% alpha — by-date view when the movement has exactly one company (cross-coy rows stay neutral), always in the by-company view.

@@ -882,19 +882,23 @@ body::before {
 .group, .surface, .card, .inset, .topbar, .sheet-panel {
   position: relative; isolation: isolate;
   background: transparent !important;
-  border: 1px solid rgba(255, 255, 255, .55);
+  border: 1px solid rgba(255, 255, 255, .72);
   box-shadow: 0 14px 34px rgba(46, 32, 22, .22);
 }
 .group, .surface, .card { border-radius: 20px; }
 .inset { border-radius: 12px; }
 .group::before, .surface::before, .card::before, .inset::before, .topbar::before, .sheet-panel::before {
   content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit;
-  background: rgba(251, 246, 236, .42);
-  -webkit-backdrop-filter: blur(12px) saturate(180%);
-  backdrop-filter: blur(12px) saturate(180%);
-  box-shadow: inset 0 0 24px rgba(255, 255, 255, .10),
-    inset 1px 1px 1px -.5px rgba(255, 255, 255, .70),
-    inset -1px -1px 1px -.5px rgba(255, 255, 255, .40);
+  /* lower tint = clearer view through; diagonal sheen = light bending across the pane */
+  background:
+    linear-gradient(118deg, rgba(255, 255, 255, .34), rgba(255, 255, 255, .07) 38%, rgba(255, 255, 255, .20) 58%, rgba(255, 255, 255, .05) 82%, rgba(255, 255, 255, .16)),
+    rgba(251, 246, 236, .22);
+  -webkit-backdrop-filter: blur(12px) saturate(215%) brightness(1.05);
+  backdrop-filter: blur(12px) saturate(215%) brightness(1.05);
+  box-shadow: inset 0 0 24px rgba(255, 255, 255, .12),
+    inset 1.5px 1.5px 1px -.5px rgba(255, 255, 255, .85),
+    inset -1.5px -1.5px 1px -.5px rgba(255, 255, 255, .50),
+    inset 0 0 0 1px rgba(255, 255, 255, .10);
 }
 /* frosted sticky day-headers: rows slide under a glass pane */
 .chead {
@@ -903,10 +907,12 @@ body::before {
 }
 .chead::before {
   content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit;
-  background: rgba(251, 246, 236, .50);
-  -webkit-backdrop-filter: blur(14px) saturate(170%);
-  backdrop-filter: blur(14px) saturate(170%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .6), inset 0 -1px 0 rgba(122, 95, 74, .08);
+  background:
+    linear-gradient(118deg, rgba(255, 255, 255, .22), rgba(255, 255, 255, .05) 45%, rgba(255, 255, 255, .14) 62%, rgba(255, 255, 255, .12)),
+    rgba(251, 246, 236, .28);
+  -webkit-backdrop-filter: blur(14px) saturate(200%) brightness(1.04);
+  backdrop-filter: blur(14px) saturate(200%) brightness(1.04);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .7), inset 0 -1px 0 rgba(122, 95, 74, .08);
 }
 
 /* --------------------------------------------- glass overlays */
@@ -930,12 +936,14 @@ body::before {
 .ov-dlg { @starting-style { opacity: 0; transform: translate(-50%, -44%) scale(.94); } }
 .ov-dlg::before {
   content: ""; position: absolute; inset: 0; z-index: -1;
-  background: rgba(251, 246, 236, .55);
-  -webkit-backdrop-filter: blur(22px) saturate(190%);
-  backdrop-filter: blur(22px) saturate(190%);
-  box-shadow: inset 0 0 24px rgba(255, 255, 255, .12),
-    inset 1px 1px 1px -.5px rgba(255, 255, 255, .75),
-    inset -1px -1px 1px -.5px rgba(255, 255, 255, .45);
+  background:
+    linear-gradient(118deg, rgba(255, 255, 255, .30), rgba(255, 255, 255, .06) 40%, rgba(255, 255, 255, .18) 60%, rgba(255, 255, 255, .14)),
+    rgba(251, 246, 236, .30);
+  -webkit-backdrop-filter: blur(22px) saturate(220%) brightness(1.05);
+  backdrop-filter: blur(22px) saturate(220%) brightness(1.05);
+  box-shadow: inset 0 0 24px rgba(255, 255, 255, .14),
+    inset 1.5px 1.5px 1px -.5px rgba(255, 255, 255, .85),
+    inset -1.5px -1.5px 1px -.5px rgba(255, 255, 255, .50);
 }
 .ov-dlg .hd { display: flex; align-items: center; gap: 10px; padding: 16px 20px 12px; border-bottom: 1px solid rgba(255, 255, 255, .45); }
 .ov-dlg .hd b { font-size: 15.5px; letter-spacing: -.01em; }
@@ -970,10 +978,12 @@ body::before {
 .ov-dock { @starting-style { opacity: 0; transform: translateY(30px); } }
 .ov-dock::before {
   content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit;
-  background: rgba(251, 246, 236, .48);
-  -webkit-backdrop-filter: blur(16px) saturate(180%);
-  backdrop-filter: blur(16px) saturate(180%);
-  box-shadow: inset 1px 1px 1px -.5px rgba(255, 255, 255, .7), inset -1px -1px 1px -.5px rgba(255, 255, 255, .4);
+  background:
+    linear-gradient(118deg, rgba(255, 255, 255, .28), rgba(255, 255, 255, .05) 40%, rgba(255, 255, 255, .16) 60%, rgba(255, 255, 255, .12)),
+    rgba(251, 246, 236, .26);
+  -webkit-backdrop-filter: blur(16px) saturate(215%) brightness(1.05);
+  backdrop-filter: blur(16px) saturate(215%) brightness(1.05);
+  box-shadow: inset 1.5px 1.5px 1px -.5px rgba(255, 255, 255, .85), inset -1.5px -1.5px 1px -.5px rgba(255, 255, 255, .50);
 }
 .ov-dock .in { padding: 12px 16px; font-size: 12px; font-weight: 650; color: var(--ink); }
 .ov-dock .in .row { display: flex; gap: 12px; align-items: center; }
