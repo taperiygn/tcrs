@@ -4,19 +4,19 @@
    ===================================================================== */
 :root {
   /* the palette — base / surface / primary / accent / spot / text */
-  --bg: #F4F1EA;                        /* base — page background          */
-  --surface: #E3E5DA;                   /* surface — cards, panels, topbar */
+  --bg: #F7EFDF;                        /* base — warm cream page          */
+  --surface: #CBD7BF;                   /* surface — saturated sage cards  */
   --pri: #5F7A6A;                       /* primary — interactive sage      */
   --pri-strong: #4A6354;                /* primary pressed / deep text     */
   --pri-soft: #E4E9DF;                  /* primary tint                    */
   --pri-deep: #CBD5C7;                  /* primary border/selection tint   */
-  --paper: #FBFAF4;                     /* inputs, menus, cells on a card  */
+  --paper: #FDFBF3;                     /* inputs, menus, cells on a card  */
   --accent: #B0821E;                    /* accent — vibrant gold (rails, hovers) */
   --spot: #9DB4C0;                      /* spot — info / activation blue   */
 
-  --surface-2: #ECEDE3;                 /* insets, sticky group heads      */
-  --line: #D6D9CB;
-  --line-strong: #C2C6B4;
+  --surface-2: #E2E9D3;                 /* insets, sticky group heads      */
+  --line: #C6CCB8;
+  --line-strong: #AEB5A0;
 
   /* text */
   --ink: #2E3A33;
@@ -108,7 +108,7 @@ body {
   padding: 8px 10px; border: 0; background: none; border-radius: 9px;
   font: inherit; font-size: 13px; font-weight: 650; color: var(--ink); cursor: pointer; text-align: left;
 }
-.school-menu button:hover { background: #E9ECE0; }
+.school-menu button:hover { background: #DFE7D3; }
 .school-menu button.on { background: var(--pri-soft); }
 .school-menu .sm-mark {
   width: 28px; height: 28px; border-radius: 9px; flex: 0 0 28px;
@@ -567,9 +567,9 @@ table.mov thead th {
   background: var(--surface);
   white-space: nowrap;
 }
-table.mov tbody td { padding: 9px 13px; border-bottom: 1px solid #DBDED0; vertical-align: top; }
+table.mov tbody td { padding: 9px 13px; border-bottom: 1px solid #B9C5A7; vertical-align: top; }
 table.mov tbody tr:last-child td { border-bottom: none; }
-table.mov tbody tr:hover td { background: #E9EBE0; }
+table.mov tbody tr:hover td { background: #DDE6CC; }
 table.mov .t {
   font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--ink);
   white-space: nowrap; font-variant-numeric: tabular-nums;
@@ -626,7 +626,7 @@ table.mov .datecell .dow { color: var(--pri); font-weight: 700; margin-left: 6px
   display: flex; align-items: center; justify-content: space-between; gap: 14px;
   padding: 13px 18px; flex-wrap: wrap;
   border-bottom: 1px solid var(--line);
-  background: #ECEEE3;
+  background: #E6ECDB;
 }
 .sheet-title { display: flex; align-items: center; gap: 11px; }
 .sheet-title svg { width: 20px; height: 20px; fill: var(--pri); }
@@ -662,7 +662,7 @@ table.mov .datecell .dow { color: var(--pri); font-weight: 700; margin-left: 6px
   text-align: left;
   font-size: 10px; font-weight: 750; letter-spacing: .11em;
   text-transform: uppercase; color: var(--ink-soft);
-  background: #E9ECE0;
+  background: #DFE7D3;
   border-bottom: 1px solid var(--line-strong);
   border-right: 1px solid var(--line);
   padding: 9px 12px; white-space: nowrap;
@@ -671,14 +671,14 @@ table.mov .datecell .dow { color: var(--pri); font-weight: 700; margin-left: 6px
 .sheet-table th.h-gutter { width: 64px; }
 .sheet-table tbody td {
   padding: 6.5px 12px;
-  border-bottom: 1px solid #DCDFD1;
-  border-right: 1px solid #E0E2D5;
+  border-bottom: 1px solid #C4CEB4;
+  border-right: 1px solid #CBD5C0;
   white-space: nowrap;
   max-width: 320px; overflow: hidden; text-overflow: ellipsis;
   cursor: text;
 }
-.sheet-table tbody tr:nth-child(even) td { background: #EAEBE0; }
-.sheet-table tbody tr:hover td { background: #EBEDE1; }
+.sheet-table tbody tr:nth-child(even) td { background: #DFE7D3; }
+.sheet-table tbody tr:hover td { background: #E5EBD9; }
 .sheet-table td.noclick { cursor: default; }
 .sheet-table td.c-activity { white-space: normal; }
 .sheet-table td.c-qty, .sheet-table td.c-qtl { font-variant-numeric: tabular-nums; }
@@ -807,7 +807,7 @@ table.mov .datecell .dow { color: var(--pri); font-weight: 700; margin-left: 6px
 .sheet-panel.blank .sheet-blank { display: block; text-align: center; }
 
 .row-skip td.c-colA { color: var(--ink-soft); font-style: italic; }
-.row-skip td.c-skipfill { background: repeating-linear-gradient(-45deg, #E3E5DA 0 6px, transparent 6px 12px); }
+.row-skip td.c-skipfill { background: repeating-linear-gradient(-45deg, #D9E0CE 0 6px, transparent 6px 12px); }
 .row-skip .srcbadge.skip { background: var(--line); color: var(--ink-faint); }
 
 /* TL bulk text editor */

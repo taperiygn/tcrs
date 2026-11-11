@@ -2,11 +2,11 @@
 html, body { margin: 0; height: 100%; }
 body {
   font-family: -apple-system, BlinkMacSystemFont, system-ui, "Segoe UI", Helvetica, Arial, sans-serif;
-  background: #F4F1EA; color: #2E3A33; -webkit-font-smoothing: antialiased;
+  background: #F7EFDF; color: #2E3A33; -webkit-font-smoothing: antialiased;
   display: grid; place-items: center; padding: 20px;
 }
 .login {
-  width: 100%; max-width: 380px; background: #E3E5DA; border: 1px solid #D6D9CB;
+  width: 100%; max-width: 380px; background: #D9E0CE; border: 1px solid #C6CCB8;
   border-radius: 18px; padding: 34px 30px 30px; text-align: center;
   box-shadow: 0 1px 2px rgba(46,58,51,.05), 0 12px 36px rgba(46,58,51,.09);
 }
@@ -21,9 +21,9 @@ form { text-align: left; }
 label { display: block; font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #8B978B; margin-bottom: 7px; }
 input[type=password] {
   width: 100%; font: inherit; font-size: 15px; padding: 11px 14px; color: inherit;
-  border: 1px solid #C2C6B4; border-radius: 11px; outline: none; background: #FBFAF4;
+  border: 1px solid #AEB5A0; border-radius: 11px; outline: none; background: #FDFBF3;
 }
-input[type=password]:focus { border-color: #5F7A6A; box-shadow: 0 0 0 3px rgba(95,122,106,.22); background: #FBFAF4; }
+input[type=password]:focus { border-color: #5F7A6A; box-shadow: 0 0 0 3px rgba(95,122,106,.22); background: #FDFBF3; }
 .msg { min-height: 20px; margin: 10px 0 4px; font-size: 13px; color: #9C4A2F; }
 button {
   width: 100%; font: inherit; font-weight: 650; font-size: 14px; padding: 11px; cursor: pointer;
