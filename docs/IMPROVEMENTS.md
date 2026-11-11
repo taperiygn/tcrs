@@ -90,6 +90,11 @@ User picked two new features: **3 · Month picker** and **5 · Edit history**. E
 - Page background warmed to cream #F7EFDF; card surface deepened to saturated sage #CBD7BF; surface-2 #E2E9D3, lines #C6CCB8/#AEB5A0, paper #FDFBF3, plus schedule/sheet row borders + hovers retuned to the deeper family; login card matches.
 - Verified via the screenshot harness (schedule + planner); all four suites green (113 assertions); server tests pass.
 
+**2026-11-07 — Colour punch pass DONE** (commit 0b8a9db, live on Pages; user asked for the suggested "more punch"):
+- Day-group headers: deeper sage gradient band (fading left→right); in the by-company view the band takes the company's own tint with the chip on paper.
+- Schedule rows washed with the company's tint at 65% alpha — by-date view when the movement has exactly one company (cross-coy rows stay neutral), always in the by-company view.
+- Verified via the screenshot harness (by-date + by-company); all four suites green (113 assertions); server tests pass.
+
 **Known issue (pre-existing):** tests/smoke.html no longer runs — it expects the sample workbook fixtures that were intentionally removed from the repo (0e6b20f) and now reports SMOKE FAILED at "model built". Not caused by recent work; needs a decision (restore fixtures without committing them, grid-delete the suite, or drive it to build data like plantest does).
 
 ---
