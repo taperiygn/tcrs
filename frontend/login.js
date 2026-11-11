@@ -1,14 +1,43 @@
 (function () {
-  /* tap sound on every click (same tick as the builder app) */
-  var tapAudio = null;
-  document.addEventListener('click', function () {
+  /* tap sound on every click (same tick as the builder app) — Web Audio,
+     decoded once at first pointerdown, a buffer source per click */
+  var tapCtx = null, tapBuf = null, tapLoading = false;
+  function tapPlayBuf() {
     try {
-      if (!tapAudio) tapAudio = new Audio('tap.mp3');
-      var a = tapAudio.cloneNode();
-      a.volume = 0.4;
-      a.play().catch(function () { });
-    } catch (e) { }
-  }, true);
+      var src = tapCtx.createBufferSource();
+      src.buffer = tapBuf;
+      var g = tapCtx.createGain();
+      g.gain.value = 0.4;
+      src.connect(g); g.connect(tapCtx.destination);
+      src.start();
+    } catch (e) { console.warn('tap sound failed:', e && e.message); }
+  }
+  function tapPrepare() {
+    try {
+      if (!tapCtx) {
+        var AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return;
+        tapCtx = new AC();
+      }
+      if (tapCtx.state === 'suspended') tapCtx.resume().catch(function () { });
+      if (!tapBuf && !tapLoading) {
+        tapLoading = true;
+        fetch('tap.mp3')
+          .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.arrayBuffer(); })
+          .then(function (ab) {
+            tapCtx.decodeAudioData(ab, function (buf) { tapBuf = buf; },
+              function (e) { tapLoading = false; console.warn('tap sound decode failed:', e && e.message); });
+          })
+          .catch(function (e) { tapLoading = false; console.warn('tap sound load failed:', e && e.message); });
+      }
+    } catch (e) { console.warn('tap sound init failed:', e && e.message); }
+  }
+  function playTap() {
+    tapPrepare();
+    if (tapCtx && tapBuf) tapPlayBuf();
+  }
+  document.addEventListener('pointerdown', tapPrepare, true);
+  document.addEventListener('click', playTap, true);
 
   /* current public tunnel link (injected by the server when the tunnel is up) */
   var tunnel = window.__TCRS_TUNNEL;

@@ -2582,18 +2582,47 @@
   }
 
   /* ------------------------------------------------------- tap sound -- */
-  /* one short tap.mp3 tick on every click; cloned per click so fast
-     repeated clicks overlap instead of cutting each other off */
-  var tapAudio = null;
-  function playTap() {
+  /* one short tap.mp3 tick on every click. Web Audio path: the file is
+     fetched + decoded once (kicked off at pointerdown, within the gesture),
+     then a buffer source plays per click — reliable in every browser.
+     Any failure is warned to the console instead of being swallowed. */
+  var tapCtx = null, tapBuf = null, tapLoading = false;
+  function tapPlayBuf() {
     try {
-      if (!tapAudio) tapAudio = new Audio('tap.mp3');
-      var a = tapAudio.cloneNode();
-      a.volume = 0.4;
-      a.play().catch(function () { });
-    } catch (e) { }
+      var src = tapCtx.createBufferSource();
+      src.buffer = tapBuf;
+      var g = tapCtx.createGain();
+      g.gain.value = 0.4;
+      src.connect(g); g.connect(tapCtx.destination);
+      src.start();
+    } catch (e) { console.warn('tap sound failed:', e && e.message); }
+  }
+  function tapPrepare() {
+    try {
+      if (!tapCtx) {
+        var AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return;
+        tapCtx = new AC();
+      }
+      if (tapCtx.state === 'suspended') tapCtx.resume().catch(function () { });
+      if (!tapBuf && !tapLoading) {
+        tapLoading = true;
+        fetch('tap.mp3')
+          .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.arrayBuffer(); })
+          .then(function (ab) {
+            tapCtx.decodeAudioData(ab, function (buf) { tapBuf = buf; },
+              function (e) { tapLoading = false; console.warn('tap sound decode failed:', e && e.message); });
+          })
+          .catch(function (e) { tapLoading = false; console.warn('tap sound load failed:', e && e.message); });
+      }
+    } catch (e) { console.warn('tap sound init failed:', e && e.message); }
+  }
+  function playTap() {
+    tapPrepare();                 // also runs on the very first click
+    if (tapCtx && tapBuf) tapPlayBuf();
   }
   function initTapSound() {
+    document.addEventListener('pointerdown', tapPrepare, true);
     document.addEventListener('click', playTap, true);
   }
 
