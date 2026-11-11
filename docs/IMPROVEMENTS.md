@@ -86,6 +86,10 @@ User picked two new features: **3 · Month picker** and **5 · Edit history**. E
 - Interactive accent is now a vibrant gold (#B0821E); COY_FILL_CYCLE re-toned across the same orange→cyan span so all identity dots sit on one harmonic wheel.
 - Verified via the screenshot harness (schedule + planner views); all four suites green (113 assertions); server tests pass.
 
+**2026-11-07 — Base/surface separation DONE** (commit 7df9ce2, live on Pages; user feedback: backgrounds "still too similar"):
+- Page background warmed to cream #F7EFDF; card surface deepened to saturated sage #CBD7BF; surface-2 #E2E9D3, lines #C6CCB8/#AEB5A0, paper #FDFBF3, plus schedule/sheet row borders + hovers retuned to the deeper family; login card matches.
+- Verified via the screenshot harness (schedule + planner); all four suites green (113 assertions); server tests pass.
+
 **Known issue (pre-existing):** tests/smoke.html no longer runs — it expects the sample workbook fixtures that were intentionally removed from the repo (0e6b20f) and now reports SMOKE FAILED at "model built". Not caused by recent work; needs a decision (restore fixtures without committing them, grid-delete the suite, or drive it to build data like plantest does).
 
 ---
