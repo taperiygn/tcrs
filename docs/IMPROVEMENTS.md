@@ -81,6 +81,11 @@ User picked two new features: **3 · Month picker** and **5 · Edit history**. E
 - Base #F4F1EA page / Surface #E3E5DA cards / Primary #5F7A6A sage (buttons, tabs, toggles, focus) / Accent #C9A47E family (troop-lift + bus tints) / Spot #9DB4C0 (ICRF info + activation blue) / Text #2E3A33.
 - Semantic tints derived from the palette: clash terracotta, tight/TBC amber, ok primary-green, activation/permission spot-blue; company identity cycle re-toned to earthy hues; purple shadows/glows → warm olive-grey; inputs/menus/cells on warm paper (#FBFAF4) instead of stark white; login page + favicon match.
 
+**2026-11-07 — Vibrant analogous pass DONE** (commit 4438785, live on Pages; user feedback: palette "too monotone"):
+- Kept the user's base/surface/primary/text tokens; re-tuned the supporting semantic tints into an analogous sweep around the primary sage — orange (clash #F6DECE/#B4501E) → gold (warn/TBC #F6E8BE/#8A660C) → lime-gold (troop-lift/buses #EAEDC6/#6E7D1F) → emerald (ok #D8EEDD/#1E7A4A) → teal (activation/perm #D2E9E4/#1E7A6A) → cyan-blue (ICRF/info #D9E9F2/#2E7391) — with richer saturation.
+- Interactive accent is now a vibrant gold (#B0821E); COY_FILL_CYCLE re-toned across the same orange→cyan span so all identity dots sit on one harmonic wheel.
+- Verified via the screenshot harness (schedule + planner views); all four suites green (113 assertions); server tests pass.
+
 **Known issue (pre-existing):** tests/smoke.html no longer runs — it expects the sample workbook fixtures that were intentionally removed from the repo (0e6b20f) and now reports SMOKE FAILED at "model built". Not caused by recent work; needs a decision (restore fixtures without committing them, grid-delete the suite, or drive it to build data like plantest does).
 
 ---
