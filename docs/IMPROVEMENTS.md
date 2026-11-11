@@ -90,6 +90,18 @@ User picked two new features: **3 · Month picker** and **5 · Edit history**. E
 - Page background warmed to cream #F7EFDF; card surface deepened to saturated sage #CBD7BF; surface-2 #E2E9D3, lines #C6CCB8/#AEB5A0, paper #FDFBF3, plus schedule/sheet row borders + hovers retuned to the deeper family; login card matches.
 - Verified via the screenshot harness (schedule + planner); all four suites green (113 assertions); server tests pass.
 
+**2026-11-11 — Terra Deep glass + overlays + tab slides DONE** (live on Pages; user picked Terra Deep from nine palette candidates, chose the glass texture, approved the overlay demo and asked for full-width tab slides):
+
+- **Terra Deep re-theme**: warm sand page (#F5EBDC), clay glass surface (#E0CDB4), deep rust primary (#8C3D26/#6E2F1C), forest accent (#3E6E52); semantic sweep re-toned earthy (mint #D6E8D2/#35682F, peach-lime #E6E3BC/#6B6F1C, butter #F3DFAC/#7D5E0C, sky #DCE7E9/#38666F, rose #F4CDBB/#8C2F12, plum #E5D8DC/#7C4456); COY_FILL_CYCLE re-toned to match; all hardcoded sage values in styles.css replaced (hover/zebra tints, var fallbacks, shadow tints, day-band gradient → rust).
+- **Glass surfaces** (technique from the user's snippet): ambient colour pools on body::before (rust/forest/gold/teal radials); every card/topbar/inset/sheet-panel becomes translucent glass — element keeps border + deep float shadow (0 14px 34px rgba(46,32,22,.22)), a dedicated ::before layer carries the frost (blur(12px) saturate(180%), warm rgba(251,246,236,.42) tint, dual corner bevels, inner glow), isolation:isolate keeps children crisp; radius bumped to 20px on cards, 12px insets.
+- **Frosted sticky day-headers**: .chead::before glass pane (blur 14px) so rows slide under; rust gradient band kept above the pane.
+- **Movement detail modal**: click any schedule row → scrim (blur 7px) + glass dialog (blur 22px saturate 190%, 22px radius) with time badge, activity, company, run, vehicles (T.vehicleLabel), POC/contact (respects the POC toggle), source, and Close / "Open in live sheet" actions; ✕ / scrim click / Esc dismiss.
+- **Floating stats dock**: fixed bottom-right glass dock with live ☰ movements / 🚌 bus / 🚚 vehicle counts, updated from refreshDerived.
+- **Full-width tab slides**: direction-aware (schedule↔live sheet, icrf→tl→planner order) — capture-phase click listener sets a body class before the panel display flips; @starting-style poses translateX(±100vw) with 0.48s ease-out; springy :active scale on topbar buttons.
+- **Login + favicon re-themed** to Terra Deep glass (login card frosted pane, rust button, rust→forest favicon gradient).
+- Print styles disable pools/panes/overlays and restore opaque paper backgrounds; prefers-reduced-motion already kills the slides.
+- Verified via the palette/overlay tryout harness + real-app screenshots; all four suites green (113 assertions); server tests pass.
+
 **2026-11-07 — Colour punch pass DONE** (commit 0b8a9db, live on Pages; user asked for the suggested "more punch"):
 - Day-group headers: deeper sage gradient band (fading left→right); in the by-company view the band takes the company's own tint with the chip on paper.
 - Schedule rows washed with the company's tint at 65% alpha — by-date view when the movement has exactly one company (cross-coy rows stay neutral), always in the by-company view.

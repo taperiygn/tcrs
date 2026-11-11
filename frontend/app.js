@@ -1516,6 +1516,7 @@
     renderMonthBanner(list);
     if (state.tab === 'grid') rerenderSrc();
     updateSavePill();
+    updateDock();
   }
 
   function renderMonthBanner(list) {
@@ -2492,12 +2493,101 @@
     });
   }
 
+  /* ================================================== glass overlays == */
+  function initOverlays() {
+    /* movement detail modal — click any schedule row */
+    document.addEventListener('click', function (ev) {
+      var tr = ev.target.closest && ev.target.closest('table.mov tbody tr');
+      if (!tr) return;
+      var rows = Array.prototype.slice.call(document.querySelectorAll('table.mov tbody tr'));
+      var idx = rows.indexOf(tr);
+      var es = filteredEntries();
+      if (idx > -1 && es[idx]) openMovementModal(es[idx]);
+    });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeOverlays(); });
+
+    /* direction-aware slide on tab + sub-tab switches — capture phase so the
+       class lands before app's own handlers flip the panel display */
+    document.addEventListener('click', function (ev) {
+      var b = ev.target.closest && ev.target.closest('#btn-tab-schedule, #btn-tab-grid, #btn-src-icrf, #btn-src-tl, #btn-src-planner');
+      if (!b) return;
+      var cls;
+      if (b.id === 'btn-tab-schedule') cls = 'slide-r';
+      else if (b.id === 'btn-tab-grid') cls = 'slide-l';
+      else {
+        var cur = document.querySelector('#btn-src-icrf.on, #btn-src-tl.on, #btn-src-planner.on');
+        var from = cur ? (cur.id === 'btn-src-icrf' ? 'icrf' : cur.id === 'btn-src-tl' ? 'tl' : 'plan') : 'icrf';
+        var to = b.id === 'btn-src-icrf' ? 'icrf' : b.id === 'btn-src-tl' ? 'tl' : 'plan';
+        var ORD = { icrf: 0, tl: 1, plan: 2 };
+        if (to === from) return;
+        cls = 'slide-' + (ORD[to] > ORD[from] ? 'r2' : 'l2');
+      }
+      document.body.classList.remove('slide-l', 'slide-r', 'slide-l2', 'slide-r2');
+      document.body.classList.add(cls);
+    }, true);
+
+    /* floating stats dock */
+    if (!document.querySelector('.ov-dock')) {
+      var d = document.createElement('div');
+      d.className = 'ov-dock';
+      d.innerHTML = '<div class="in"><div class="row" id="ov-dock-row"></div>' +
+        '<div class="hint">Click any movement row for a glass detail card</div></div>';
+      document.body.appendChild(d);
+      updateDock();
+    }
+  }
+
+  function openMovementModal(e) {
+    closeOverlays();
+    var scrim = document.createElement('div');
+    scrim.className = 'ov-scrim';
+    document.body.appendChild(scrim);
+    var tm = e.timeStart === 'TBC' ? 'TBC'
+      : (e.timeStart || '') + (e.timeEnd && e.timeEnd !== e.timeStart ? '–' + fmtHHMM(e.timeEnd) : '');
+    var d = document.createElement('div');
+    d.className = 'ov-dlg';
+    d.innerHTML =
+      '<div class="hd"><span class="tm">' + esc(tm) + '</span>' +
+      '<b>' + esc(e.activity || 'Movement') + '</b><span class="x" title="Close">✕</span></div>' +
+      '<div class="grid">' +
+      '<span class="k">Company</span><span class="v">' + esc((e.coys || []).join(' + ') || '—') + '</span>' +
+      '<span class="k">Run</span><span class="v">' + esc((e.from || '—') + ' → ' + (e.to || 'same point')) + '</span>' +
+      '<span class="k">Vehicles</span><span class="v">' + esc(T.vehicleLabel(e)) + '</span>' +
+      '<span class="k">POC</span><span class="v">' + (state.poc ? esc(e.officer || '—') : 'hidden') + '</span>' +
+      '<span class="k">Contact</span><span class="v">' + (state.poc ? esc(e.phone || '—') : 'hidden') + '</span>' +
+      '<span class="k">Source</span><span class="v">' + esc(e.source || '—') + '</span>' +
+      '</div><div class="ft"><button class="btn" data-ov="close">Close</button>' +
+      '<button class="btn pri" data-ov="edit">Open in live sheet</button></div>';
+    document.body.appendChild(d);
+    d.querySelector('[data-ov="close"]').onclick = closeOverlays;
+    d.querySelector('.x').onclick = closeOverlays;
+    d.querySelector('[data-ov="edit"]').onclick = function () { closeOverlays(); setTab('grid'); setSrc('icrf'); };
+    scrim.onclick = closeOverlays;
+  }
+
+  function closeOverlays() {
+    var s = document.querySelector('.ov-scrim'), d = document.querySelector('.ov-dlg');
+    if (s) s.remove(); if (d) d.remove();
+  }
+
+  function updateDock() {
+    var row = document.getElementById('ov-dock-row');
+    if (!row) return;
+    var es = filteredEntries(), buses = 0, veh = 0;
+    es.forEach(function (e) { if (e.kind === 'bus') buses += (e.qty || 0); else veh += (e.qty || 0); });
+    row.innerHTML =
+      '<span class="st">☰ ' + es.length + '</span>' +
+      '<span class="st">🚌 ' + buses + '</span>' +
+      '<span class="st">🚚 ' + veh + '</span>';
+  }
+
   (function () {
     var saved = parseInt(lsGet('tcrs:school'), 10);
     if (saved >= 1 && saved <= 4 && !/^#auto/.test(location.hash)) state.school = saved;
   })();
   init();
   initSchoolMenu();
+  initOverlays();
   applySchoolTexts();
   setTab(state.tab);   // sync visibility with the (possibly hash-set) tab
   syncControls();
