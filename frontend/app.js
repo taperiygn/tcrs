@@ -40,9 +40,9 @@
   /* Pastel palette, applied by roster order; school 4 keeps its established
      colours, letter schools cycle through the same fills. */
   var COY_FILL_CYCLE = [
-    ['#86681F', '#F0E6C9'], ['#6B4F3A', '#EDE0D2'], ['#9C4A2F', '#EFD9CE'],
-    ['#4C7086', '#E0E9EC'], ['#47614E', '#E2E8DE'], ['#5F7A6A', '#DCE5DC'],
-    ['#3E6275', '#DCE7EE'], ['#7A6A55', '#EAE4D6']
+    ['#8A660C', '#F6E8BE'], ['#6E7D1F', '#EAEDC6'], ['#B4501E', '#F6DECE'],
+    ['#1E7A6A', '#D2E9E4'], ['#1E7A4A', '#D8EEDD'], ['#2E7391', '#D9E9F2'],
+    ['#3E6E8E', '#DCE7F0'], ['#5F7A6A', '#DCE5DC']
   ];
   var COY_COLORS = {
     '1ST': COY_FILL_CYCLE[0], '2ND': COY_FILL_CYCLE[1], '3RD': COY_FILL_CYCLE[2],
