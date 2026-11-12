@@ -75,7 +75,7 @@
         });
         html += '<td class="gutter noclick">' +
           '<button class="g-btn" data-act="dup" title="Duplicate this row">⧉</button>' +
-          '<button class="g-btn g-del" data-act="del" title="Delete this row">✕</button>' +
+          '<button class="g-btn g-del" data-act="del" title="Delete this row — Undo appears in a toast">✕</button>' +
           '</td></tr>';
       });
       tbody.innerHTML = html || '<tr class="sheet-empty"><td colspan="20">no rows match your filters</td></tr>';
@@ -216,17 +216,8 @@
           closeMenu();
           opts.onDup(id);
         } else if (act === 'del') {
-          if (btn.dataset.armed) {            // two-step confirm, like the row gutter
-            closeMenu();
-            opts.onDel(id);
-          } else {
-            btn.dataset.armed = '1';
-            btn.classList.add('armed');
-            btn.textContent = 'Confirm delete?';
-            setTimeout(function () {
-              if (m.isConnected) { btn.dataset.armed = ''; btn.classList.remove('armed'); btn.textContent = '✕ Delete'; }
-            }, 2600);
-          }
+          closeMenu();
+          opts.onDel(id);                 // instant — the app offers Undo via toast
         }
       });
     }
@@ -255,13 +246,7 @@
         if (!id) return;
         if (btn.dataset.act === 'dup') opts.onDup(id);
         else if (btn.dataset.act === 'del') {
-          if (state.delArm === id) { state.delArm = null; opts.onDel(id); }
-          else {
-            state.delArm = id;
-            btn.classList.add('armed');
-            btn.title = 'click again to confirm delete';
-            setTimeout(function () { state.delArm = null; drawBody(); }, 2600);
-          }
+          opts.onDel(id);                 // instant — the app offers Undo via toast
         }
         return;
       }

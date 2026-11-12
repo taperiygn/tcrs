@@ -87,13 +87,22 @@
   var $ = function (id) { return document.getElementById(id); };
 
   /* ----------------------------------------------------------- toast -- */
-  var toastTimer = null;
-  function toast(msg, isErr) {
-    var t = $('toast');
+  /* toast(msg, isErr) as before, or toast(msg, { err, ms, action:{label,fn} })
+     — with an action the toast carries a button (e.g. "Undo") that fires fn */
+  var toastTimer = null, toastAction = null;
+  function toast(msg, opts) {
+    var isErr = opts === true || !!(opts && opts.err);
+    var t = $('toast'), act = $('toast-act');
+    toastAction = (opts && opts.action) || null;
+    if (toastAction) { act.hidden = false; act.textContent = toastAction.label || 'Undo'; }
+    else { act.hidden = true; }
     $('toast-msg').innerHTML = msg;
     t.className = 'toast show' + (isErr ? ' err' : '');
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(function () { t.className = 'toast' + (isErr ? ' err' : ''); }, 5200);
+    toastTimer = setTimeout(function () {
+      t.className = 'toast' + (isErr ? ' err' : '');
+      toastAction = null; act.hidden = true;
+    }, (opts && opts.ms) || 5200);
   }
 
   /* --------------------------------------------------------- helpers -- */
@@ -284,7 +293,7 @@
   function saveStore(optsOnly) {    // debounced — heavy JSON write happens after a pause
     if (!state.model) return;
     renderPlanner();                // the planner tab tracks edits live
-    if (!optsOnly) state.touched = true;
+    if (!optsOnly) { state.touched = true; dataEpoch++; }
     savePending = true;
     clearTimeout(saveTimer);
     saveTimer = setTimeout(flushSave, 700);
@@ -334,7 +343,53 @@
     });
     return m;
   }
+  /* ---------------------------- in-session undo (Recent changes) -------
+     Every history event also stores a full snapshot of the editable data
+     as it was just *after* that event (undoStack, oldest pushed first),
+     plus one base snapshot (undoBase) taken when the month was loaded.
+     "Undo" on a Recent-changes row puts the data back to how it was
+     *before* that change — dropping it and every later one. In memory
+     only: events from a previous session have no snapshots and show no
+     undo button. */
+  var UNDO_CAP = 20;
+  var undoBase = null, undoStack = [], undoTrimmed = 0, sessionEvents = 0;
+  var dataEpoch = 0;         // bumped on every data mutation — stale undo offers are refused
+
+  function undoSnap() {
+    return JSON.stringify({ entries: state.entries, tlLines: state.tlLines,
+      skipped: state.skipped, coys: state.coys });
+  }
+  function undoResetBase() { undoBase = undoSnap(); undoStack = []; undoTrimmed = 0; sessionEvents = 0; }
+
+  function applySnapshot(json) {
+    var s = JSON.parse(json);
+    state.entries = s.entries; state.tlLines = s.tlLines;
+    state.skipped = s.skipped; state.coys = s.coys;
+    histLast = histSig();    // the restore itself must not double-count as an edit burst
+    changed(); rerenderSrc(); renderChips(); renderNotes(); renderHistory();
+    saveStore();
+  }
+
+  function canRevert(k) {    // k = index into state.history (0 = newest)
+    if (k >= sessionEvents) return false;   // recorded in an earlier session
+    var j = sessionEvents - 2 - k;          // snapshot after event k+1 = state before event k
+    if (j < 0) return true;                 // oldest session event → the load-time base
+    return j - undoTrimmed >= 0;            // old snapshots may have been trimmed away
+  }
+
+  function revertEvent(k) {
+    var j = sessionEvents - 2 - k;
+    var snap = j < 0 ? undoBase : undoStack[j - undoTrimmed];
+    if (!snap) return false;
+    histNote = { src: 'revert', text: 'Reverted to ' + histWhen((state.history[k] || {}).at) };
+    applySnapshot(snap);
+    return true;
+  }
+
   function pushHistory(src, text) {
+    undoStack.push(undoSnap());
+    if (undoStack.length > UNDO_CAP) { undoStack.shift(); undoTrimmed++; }
+    sessionEvents++;
     state.history.unshift({ at: new Date().toISOString(), src: src, text: text });
     if (state.history.length > HIST_MAX) state.history.length = HIST_MAX;
     renderHistory();
@@ -370,9 +425,13 @@
     var h = state.history || [];
     count.textContent = h.length;
     count.classList.toggle('zero', h.length === 0);
-    var rows = h.slice(0, 15).map(function (ev) {
+    var rows = h.slice(0, 15).map(function (ev, k) {
+      var rev = canRevert(k)
+        ? '<button type="button" class="hrev" data-k="' + k +
+          '" title="Undo this change — later changes are undone too">↩</button>'
+        : '';
       return '<div class="hrow"><span class="when">' + esc(histWhen(ev.at)) +
-        '</span><span>' + esc(ev.text) + '</span></div>';
+        '</span><span class="txt">' + esc(ev.text) + '</span>' + rev + '</div>';
     });
     if (h.length > 15) rows.push('<div class="hrow more">…and ' + (h.length - 15) + ' earlier</div>');
     $('hist-list').innerHTML = h.length ? rows.join('') : '<div class="empty">nothing yet this month</div>';
@@ -936,6 +995,7 @@
     if (!model) {
       state.model = null; state.entries = []; state.restoredAt = null; state.touched = false;
       histLast = {}; histNote = null;
+      undoResetBase();
       state.busPlan = {}; state.planOrder = {}; state.planTimes = {};
       state.planAuto = {}; state.planDirty = {}; state.planDragId = null;
       $('sync-pill').hidden = true;
@@ -1014,6 +1074,7 @@
     // line ids (used by the live sheet and manual lines)
     normalizeTLLines();
     histLast = histSig();             // history diff baseline = what is on screen now
+    undoResetBase();                  // undo baseline = the freshly (re)opened month
 
     syncControls();
     renderChips();
@@ -1312,18 +1373,42 @@
     changed();
     rerenderSrc();
   }
+  /* Deletes are instant — the undo comes as a toast button, backed by a
+     full pre-delete snapshot. The offer is voided if any other data edit
+     happens before it is used (the epoch moved), pointing at the
+     Recent-changes list instead. */
+  function offerRowUndo(msg, snap) {
+    toast(msg, { action: { label: 'Undo', fn: function () {
+      if (dataEpoch !== snap._epoch) {
+        toast('Other edits happened since — undo from <b>Recent changes</b> in the left panel instead.', true);
+        return;
+      }
+      applySnapshot(snap._data);
+      toast('Row restored.', false);
+    } } });
+  }
   function delIcrf(id) {
     if (id.charAt(0) === 's') {
       var idx = +id.slice(1);
-      if (state.skipped[idx]) { state.skipped.splice(idx, 1); saveStore(); updateSavePill(); rerenderSrc(); }
+      var s = state.skipped[idx];
+      if (!s) return;
+      var snapS = { _data: undoSnap(), _epoch: dataEpoch };
+      state.skipped.splice(idx, 1);
+      saveStore();
+      snapS._epoch = dataEpoch;
+      updateSavePill(); rerenderSrc();
+      offerRowUndo('Skipped row removed.', snapS);
       return;
     }
     var e = findEntry(id);
     if (!e) return;
+    var snap = { _data: undoSnap() };
     state.entries.splice(state.entries.indexOf(e), 1);
     saveStore();
+    snap._epoch = dataEpoch;
     changed();
     rerenderSrc();
+    offerRowUndo('Row deleted.', snap);
   }
 
   /* ================================================ Troop-lift view === */
@@ -2192,9 +2277,9 @@
           esc(monthShort(d)) + ' ' + esc(state.model.year) + '</span></div>' +
           gstatsHTML(list.length, buses, veh, !!tbc) +
           '</div>' +
-          '<table class="mov">' + tableHead('date', poc) + '<tbody>' +
+          '<div class="mov-wrap"><table class="mov">' + tableHead('date', poc) + '<tbody>' +
           list.map(function (e) { return '<tr' + rowWash(e.coys) + '>' + rowCells(e, 'date', poc) + '</tr>'; }).join('') +
-          '</tbody></table>';
+          '</tbody></table></div>';
         c.appendChild(sec);
       });
     } else {
@@ -2216,9 +2301,9 @@
           '<span class="dsub">' + (coy === 'SCHWIDE' ? 'School-wide movements' : esc(coy) + ' Coy') + '</span></div>' +
           gstatsHTML(list.length, buses, veh, false) +
           '</div>' +
-          '<table class="mov">' + tableHead('coy', poc) + '<tbody>' +
+          '<div class="mov-wrap"><table class="mov">' + tableHead('coy', poc) + '<tbody>' +
           list.map(function (e) { return '<tr' + rowWash(null, coy) + '>' + rowCells(e, 'coy', poc) + '</tr>'; }).join('') +
-          '</tbody></table>';
+          '</tbody></table></div>';
         c.appendChild(sec);
       });
       if (!any) {
@@ -2500,10 +2585,30 @@
     $('rail-toggle').addEventListener('click', function () {
       var collapsed = document.body.classList.toggle('rail-collapsed');
       this.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
-      this.textContent = collapsed ? '›' : '‹';
-      this.title = collapsed ? 'Show the side panel' : 'Hide the side panel';
+      railLabel(collapsed);
       lsSet('tcrs:rail', collapsed ? 'collapsed' : 'open');
     });
+
+    // the rail toggle reads as a slim ‹ gutter on desktop, a full-width
+    // "Options" bar once the rail stacks above the workspace (≤1140px)
+    var railMQ = window.matchMedia ? window.matchMedia('(max-width: 1140px)') : null;
+    function railLabel(collapsed) {
+      var t = $('rail-toggle');
+      t.textContent = (railMQ && railMQ.matches)
+        ? (collapsed ? 'Options ▾' : 'Options ▴')
+        : (collapsed ? '›' : '‹');
+      t.title = collapsed ? 'Show the side panel' : 'Hide the side panel';
+    }
+    function syncRailMQ() {
+      var collapsed = document.body.classList.contains('rail-collapsed');
+      $('rail-toggle').setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+      railLabel(collapsed);
+    }
+    if (railMQ) {
+      if (railMQ.addEventListener) railMQ.addEventListener('change', syncRailMQ);
+      else if (railMQ.addListener) railMQ.addListener(syncRailMQ);
+      syncRailMQ();
+    }
 
     var searchT = null;
     $('grid-search').addEventListener('input', function (e) {
@@ -2537,6 +2642,41 @@
     document.addEventListener('visibilitychange', function () { if (document.hidden) flushSave(true); });
     window.addEventListener('online', function () { if (state.model) { savePending = true; flushSave(); } });
     $('sync-pill').addEventListener('click', function () { if (remote.conflict) location.reload(); });
+
+    // toast action button ("Undo" on deletes)
+    $('toast-act').addEventListener('click', function () {
+      var fn = toastAction && toastAction.fn;
+      clearTimeout(toastTimer);
+      $('toast').className = 'toast';
+      this.hidden = true;
+      toastAction = null;
+      if (fn) fn();
+    });
+
+    // Recent changes: ↩ restores the data to just before that event
+    $('hist-list').addEventListener('click', function (ev) {
+      var b = ev.target.closest('.hrev');
+      if (!b) return;
+      var k = +b.dataset.k;
+      if (!canRevert(k)) return;
+      if (!b.dataset.armed) {      // two-step: it also drops every later change
+        b.dataset.armed = '1';
+        b.classList.add('armed');
+        b.title = 'Click again to undo this change (later changes are undone too)';
+        setTimeout(function () {
+          if (!b.isConnected) return;
+          b.dataset.armed = '';
+          b.classList.remove('armed');
+          b.title = 'Undo this change — later changes are undone too';
+        }, 2600);
+        return;
+      }
+      var e = (state.history || [])[k];
+      if (!e || !revertEvent(k)) return;
+      var n = k + 1;
+      toast('Undid <b>' + esc(e.text) + '</b>' +
+        (n > 1 ? ' and ' + (n - 1) + ' later change' + (n === 2 ? '' : 's') : '') + '.', false);
+    });
     $('btn-logout').addEventListener('click', async function () {
       flushSave();
       try { await fetch(API_BASE + '/api/logout', { method: 'POST', credentials: 'include', headers: apiHeaders(false) }); } catch (e) { }
