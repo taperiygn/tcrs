@@ -85,6 +85,71 @@
     out.push('CRASH(A) ' + (e && e.stack || e));
   }
 
+  /* ---------- part A2: the parser — troop lift formats ---------- */
+  try {
+    var T = window.TCRS;
+    function stubIcrf() {
+      var wb = new ExcelJS.Workbook();
+      wb.addWorksheet('NOVEMBER');
+      return { worksheets: [wb.worksheets[0]] };
+    }
+
+    /* the columnar TEKONG layout: DATE is a shared formula whose cached
+       result ExcelJS returns as an Invalid Date / NaN — the DAY column
+       plus the "DECEMBER-2026" header text must rebuild the date */
+    var wbc = new ExcelJS.Workbook();
+    var wsc = wbc.addWorksheet('DEC 26 TL');
+    wsc.getRow(1).getCell(11).value = 'DECEMBER-2026';
+    wsc.getRow(3).values = [, 'DATE', 'DAY', 'DAY OF WEEK', 'TIME', 'TIME GAP (H:MM)', 'COY/UNIT', 'PURPOSE', 'PICK-UP POINT TO DROP-OFF POINT', 'NO. OF BUSES', 'REMARKS'];
+    wsc.getRow(4).values = [, { formula: 'B4&"-"&$K$1', result: new Date('zzz') }, 1, 'Tuesday', '0630', , '1ST', 'COMD VETT', 'RHC - MTL', 4, '4x 5-TON'];
+    wsc.getRow(5).values = [, { formula: 'B5&"-"&$K$1', result: NaN }, 1, 'Tuesday', '0700', , '4TH', 'COMD VETT', 'RHC - MTL', 4, ''];
+    wsc.getRow(6).values = [, , 2, 'Wednesday', '1700', , '5TH', 'GX II', 'MTL - RHC', 2, '2x 5-TON'];
+    wsc.getRow(7).values = [, '-DECEMBER-2026', , , , , , , , ];
+    var mc = T.parseWorkbooks(stubIcrf(), wbc, 4);
+    var tlc = mc.entries.filter(function (e) { return e.source === 'TROOPLIFT'; });
+    ok('columnar TL detected — 5 movements (3 buses + 2 tonners)',
+      tlc.length === 5 && tlc.filter(function (e) { return e.vehicleType === 'TONNERS'; }).length === 2,
+      tlc.length);
+    ok('dates rebuilt from DAY column when DATE formulas are uncached',
+      tlc.every(function (e) { return e.date === '2026-12-01' || e.date === '2026-12-02'; }),
+      tlc.map(function (e) { return e.date; }).join(','));
+    var first = tlc[0];
+    ok('time/from/to/qty/coys/activity parsed from the columns',
+      first.timeStart === '0630' && first.from === 'RHC' && first.to === 'MTL' &&
+      first.qty === 4 && first.coys[0] === '1ST' && first.activity === 'COMD VETT',
+      JSON.stringify([first.timeStart, first.from, first.to, first.qty, first.coys, first.activity]));
+    ok('remark "4x 5-TON" emits a same-slot tonner movement',
+      tlc.some(function (e) {
+        return e.vehicleType === 'TONNERS' && e.qty === 4 && e.timeStart === '0630' &&
+          e.coys[0] === '1ST' && e.date === '2026-12-01';
+      }));
+    ok('junk placeholder rows skipped, not unmatched',
+      (mc.tlUnmatched || []).length === 0, JSON.stringify(mc.tlUnmatched));
+    ok('columnar month/year derived',
+      mc.monthName === 'DECEMBER' && mc.year === 2026, mc.monthName + ' ' + mc.year);
+
+    /* the free-text template keeps parsing exactly as before */
+    var wbt = new ExcelJS.Workbook();
+    var wst = wbt.addWorksheet('NOVEMBER TL');
+    wst.getRow(1).values = ['NOVEMBER TL'];
+    wst.getRow(2).getCell(1).value = new Date(Date.UTC(2026, 10, 23));
+    wst.getRow(3).getCell(1).value = '0800 MTL - RHC 4 BUSES (4TH FIRST)';
+    wst.getRow(4).getCell(1).value = '23/11 (*TBC*)';
+    wst.getRow(5).getCell(1).value = '0915 RHC - MTL TONNERS (5TH GX RTU)';
+    var mt = T.parseWorkbooks(stubIcrf(), wbt, 4);
+    var tlt = mt.entries.filter(function (e) { return e.source === 'TROOPLIFT'; });
+    ok('free-text TL still parses (2 lines, right tags)',
+      tlt.length === 2 && tlt[0].timeStart === '0800' && tlt[0].coys[0] === '4TH' &&
+      tlt[0].activity === 'FIRST' && tlt[1].coys[0] === '5TH' && tlt[1].activity === 'GX RTU',
+      JSON.stringify(tlt.map(function (e) { return [e.timeStart, e.coys, e.activity]; })));
+    ok('free-text month/day still work',
+      mt.monthName === 'NOVEMBER' && tlt[0].date === '2026-11-23',
+      mt.monthName + ' ' + (tlt[0] && tlt[0].date));
+  } catch (e) {
+    failures++;
+    out.push('CRASH(A2) ' + (e && e.stack || e));
+  }
+
   /* ---------- part B: the live planner tab ---------- */
   try {
     var html = await fetch('../index.html').then(function (r0) { return r0.text(); });

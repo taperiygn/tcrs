@@ -22,3 +22,8 @@ __pycache__/
 frontend/config.local.js
 backend/.M
 backend/.M.*
+
+# local-only source files: never commit workbooks or media drops
+backend/Untitled spreadsheet.xlsx
+Untitled spreadsheet*.xlsx
+.github/workflows/*.mp3

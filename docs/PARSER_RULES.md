@@ -21,7 +21,30 @@ Rows above the header or with a non-matching column A are **skipped with a
 reason** (`skipped[]`), never silently dropped. A 5,000-row safety cap applies.
 
 ### TROOPLIFT (bus movements)
-One free-text column. Recognised row types, in order:
+Two layouts are accepted, detected per sheet:
+
+**A. Columnar ("TEKONG node") layout** — a header row containing DATE / TIME /
+COY-UNIT / PURPOSE / PICK-UP→DROP-OFF / NO. OF BUSES (the "Untitled
+spreadsheet" style export). One movement per row:
+
+| DATE | DAY | TIME | COY/UNIT | PURPOSE | PICK-UP → DROP-OFF | NO. OF BUSES | REMARKS |
+|---|---|---|---|---|---|---|---|
+| 1-DECEMBER-2026 | 1 | 0630 | 1ST | COMD VETT | RHC - MTL | 4 | 4x 5-TON |
+
+- the DATE column is usually a shared formula whose cached result ExcelJS
+  can't read (Invalid Date / NaN) — the date is rebuilt from the **DAY**
+  column (1–31) plus the month/year found in the header text
+  ("DECEMBER-2026") or the sheet name ("DEC 26 TL");
+- REMARKS like `4x 5-TON` emit a **second movement** (same time/route,
+  vehicleType TONNERS) — mirroring the sheet's own SCHEDULE TO TEXT (5TONs)
+  column;
+- junk placeholder rows ("-DECEMBER-2026" with no time) are skipped, never
+  shown as unparsed; rows with coy/route but no time land in unmatched;
+- unknown company tags (e.g. `D`, `HQ` for School 4) keep the row but with
+  no company — same as free-text lines with unrecognised tags.
+
+**B. Free-text layout** (original). One free-text column. Recognised row
+types, in order:
 
 1. **Excel date cell** → sets the current date for following lines.
 2. **Title** — `NOVEMBER TL` style (`<MONTH WORD> [year] [TL]`).

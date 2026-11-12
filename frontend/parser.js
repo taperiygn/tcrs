@@ -57,7 +57,12 @@
     var v = cell.value;
     if (v && typeof v === 'object') {
       if (v instanceof Date) return v;
-      if (v.result !== undefined) return v.result;   // formula cell
+      if (v.result !== undefined) {
+        /* uncached/invalid formula results come back as Invalid Date or NaN */
+        if (v.result instanceof Date && isNaN(v.result.getTime())) return null;
+        if (typeof v.result === 'number' && !isFinite(v.result)) return null;
+        return v.result;
+      }
       if (typeof v.richText !== 'undefined') return v.richText.map(function (t) { return t.text; }).join('');
       return v.text !== undefined ? v.text : v;
     }
@@ -293,7 +298,203 @@
     };
   }
 
+  /* ---- columnar TROOPLIFT ("Untitled spreadsheet" / TEKONG NODE style) ----
+     A structured TL sheet: header row DATE | DAY | DAY OF WEEK | TIME |
+     COY/UNIT | PURPOSE | PICK-UP POINT TO DROP-OFF POINT | NO. OF BUSES |
+     REMARKS …, one movement per row. REMARKS like "4x 5-TON" also emit a
+     separate tonner movement (same time/route), mirroring the sheet's own
+     SCHEDULE TO TEXT (5TONs) column. Junk rows ("-DECEMBER-2026" formulas
+     with no time) are skipped, never shown as unparsed. */
+  var TL_HEAD_PATTERNS = [
+    ['date', /^DATE$/],
+    ['day', /^DAY$/],
+    ['time', /^TIME$/],
+    ['coy', /^COY\s*\/?\s*UNIT$|^COY$/],
+    ['activity', /^PURPOSE$/],
+    ['route', /^PICK-?UP/i],
+    ['qty', /^NO\.?\s*OF\s*BUSES$/],
+    ['remarks', /^REMARKS$/]
+  ];
+  function findTLColumnHeader(ws) {
+    var limit = Math.min(30, ws.rowCount || 30);
+    for (var r = 1; r <= limit; r++) {
+      var map = {}, row = ws.getRow(r), seen = 0;
+      for (var c = 1; c <= Math.min(20, ws.columnCount || 20); c++) {
+        var t = norm(cellValue(row.getCell(c))).toUpperCase();
+        if (!t) continue;
+        for (var i = 0; i < TL_HEAD_PATTERNS.length; i++) {
+          if (map[TL_HEAD_PATTERNS[i][0]]) continue;       // first match wins
+          if (TL_HEAD_PATTERNS[i][1].test(t)) { map[TL_HEAD_PATTERNS[i][0]] = c; seen++; break; }
+        }
+      }
+      if (map.date && map.time && map.coy && map.route && map.qty) return { row: r, map: map, cols: seen };
+    }
+    return null;
+  }
+  function tlDateCellToYMD(v) {
+    if (v === null || v === undefined || norm(String(v)) === '') return null;
+    if (v instanceof Date) return isNaN(v.getTime()) ? null : ymd(v);
+    if (typeof v === 'number' && isFinite(v)) {           // excel date serial
+      return excelSerialToYMD(v);
+    }
+    var t = norm(v).toUpperCase();
+    var dm = /^(\d{1,2})[-\/ ]([A-Z]+)[-\/ ](\d{2,4})$/.exec(t);
+    if (dm) {
+      var mo = MONTH_WORD[dm[2]] || MONTH_WORD[dm[2].slice(0, 3)];
+      if (!mo) return null;
+      var y = +dm[3]; if (y < 100) y += 2000;
+      return y + '-' + pad(mo) + '-' + pad(+dm[1]);
+    }
+    var ph = TL_TBC_DATE.exec(t);                          // 23/11 or 23/11/26
+    if (ph) {
+      var y2 = ph[3] ? +ph[3] : new Date().getUTCFullYear();
+      if (y2 < 100) y2 += 2000;
+      return y2 + '-' + pad(+ph[2]) + '-' + pad(+ph[1]);
+    }
+    return null;
+  }
+  function tlComposeText(fields) {
+    return fields.timeStart + ' ' + fields.from + ' - ' + fields.to + ' ' +
+      (fields.qty ? fields.qty + ' ' : '') + fields.vehicleType +
+      ' (' + (fields.coyLabel || fields.coyRaw || '') +
+      (fields.coyLabel || fields.coyRaw ? ' ' : '') + fields.activity + ')';
+  }
+  function parseTROOPLIFT_COLUMNS(ws, head, school) {
+    var res = { monthWord: null, tlDateMonths: [], entries: [], lines: [], unmatched: [], coySet: {}, days: {}, tbcDays: {} };
+    var curDate = null;
+    /* month/year of the sheet, for the DAY-column date fallback: the DATE
+       column is often a shared formula whose cached value ExcelJS can't
+       read — but col B "DAY" (1, 2, …) plus "DECEMBER-2026" in the header
+       rebuilds the date. Header text first, then the sheet name. */
+    var colMonth = null, colYear = null;
+    var MY_RE = /\b(JANUARY|FEBRUARY|MARCH|APRIL|MAY|JUNE|JULY|AUGUST|SEPTEMBER|OCTOBER|NOVEMBER|DECEMBER|JAN|FEB|MAR|APR|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\b\D{0,3}(\d{2,4})?/;
+    (function () {
+      var limit = Math.min(30, ws.rowCount || 30);
+      for (var r = 1; r <= limit; r++) {
+        var row = ws.getRow(r);
+        for (var c = 1; c <= Math.min(20, ws.columnCount || 20); c++) {
+          var t = norm(cellValue(row.getCell(c))).toUpperCase();
+          var m = MY_RE.exec(t);
+          if (m && MONTH_WORD[m[1]]) {
+            colMonth = MONTH_WORD[m[1]];
+            if (m[2]) { colYear = +m[2]; if (colYear < 100) colYear += 2000; }
+            return;
+          }
+        }
+      }
+      var sm = MY_RE.exec(norm(ws.name).toUpperCase());
+      if (sm && MONTH_WORD[sm[1]]) {
+        colMonth = MONTH_WORD[sm[1]];
+        if (sm[2]) { colYear = +sm[2]; if (colYear < 100) colYear += 2000; }
+      }
+    })();
+    if (colMonth) res.monthWord = colMonth;
+    ws.eachRow({ includeEmpty: false }, function (row) {
+      var r = row.number;
+      if (r <= head.row) return;
+      var gv = function (key) {
+        var c = head.map[key];
+        return c ? cellValue(row.getCell(c)) : null;
+      };
+      /* date transition — with the DAY-column fallback */
+      var dv = tlDateCellToYMD(gv('date'));
+      if (!dv) {
+        var dcell = gv('day'), dayNum = null;
+        if (typeof dcell === 'number' && isFinite(dcell)) dayNum = Math.round(dcell);
+        else if (/^\d{1,2}(\.0+)?$/.test(norm(dcell))) dayNum = parseInt(norm(dcell), 10);
+        if (dayNum >= 1 && dayNum <= 31 && colMonth && colYear) {
+          dv = colYear + '-' + pad(colMonth) + '-' + pad(dayNum);
+        }
+      }
+      if (dv) {
+        curDate = dv;
+        res.days[curDate] = 1;
+        res.tlDateMonths.push(+dv.slice(5, 7));
+      }
+
+      var timeRaw = gv('time');
+      var tTime = norm(timeRaw).toUpperCase();
+      var time = tTime === 'TBC' ? 'TBC' : hhmmFromTime(timeRaw);
+      var routeRaw = norm(gv('route'));
+      var coyRaw = norm(gv('coy'));
+      if (!time && !routeRaw && !coyRaw) return;           // placeholder / junk row
+
+      if (!time) {                                          // has coy/route but no time
+        res.unmatched.push({ row: r, text: routeRaw || coyRaw });
+        res.lines.push({ row: r, kind: 'line', text: routeRaw || coyRaw, status: 'unparsed', date: curDate });
+        return;
+      }
+
+      var sp = routeRaw.indexOf(' - ');
+      var qv = gv('qty');
+      var qn = typeof qv === 'number' ? Math.round(qv) : (parseInt(norm(qv), 10) || 0);
+      var act = norm(gv('activity')) || '—';
+      var coys = [], label = [];
+      coyRaw.split('/').forEach(function (p) {
+        p = norm(p).toUpperCase().replace(/\s*COY\.?$/i, '').trim();
+        if (!p) return;
+        if (companyOK(p, school)) coys.push(p);
+        label.push(p);
+      });
+      var fields = {
+        timeStart: time,
+        from: sp > -1 ? routeRaw.slice(0, sp) : routeRaw,
+        to: sp > -1 ? routeRaw.slice(sp + 3) : '',
+        qty: qn > 0 ? qn : null,
+        vehicleType: 'BUSES', kind: 'bus',
+        coys: coys, coyLabel: coys.join(' / '),
+        coyRaw: coyRaw, coyAll: label.join(' / '),
+        activity: act,
+        flagged: false,
+        tbc: time === 'TBC'
+      };
+
+      function pushEntry(suffix, vehType, q, rawText) {
+        var e = {
+          id: 't' + r + suffix,
+          source: 'TROOPLIFT',
+          date: curDate,
+          activity: fields.activity,
+          officer: '', phone: '', unit: '',
+          nextDay: false, dayDiff: 0, eDate: curDate || '',
+          from: '', to: '',
+          flagged: false,
+          tbc: fields.tbc,
+          row: r,
+          rawText: rawText
+        };
+        var f2 = {};
+        for (var k in fields) f2[k] = fields[k];
+        f2.vehicleType = vehType;
+        f2.qty = q;
+        applyTLFields(e, f2);
+        fields.coys.forEach(function (c) { res.coySet[c] = 1; });
+        res.entries.push(e);
+        res.lines.push({ row: r, kind: 'line', text: rawText, status: 'ok', date: curDate, entryId: e.id });
+      }
+      var text = tlComposeText({ timeStart: time, from: fields.from, to: fields.to,
+        qty: fields.qty, vehicleType: 'BUSES',
+        coyLabel: fields.coyLabel, coyRaw: coyRaw, activity: fields.activity });
+      pushEntry('', 'BUSES', fields.qty, text);
+
+      /* remarks "4x 5-TON" -> separate tonner movement, same slot */
+      var rm = norm(gv('remarks'));
+      var tm = /^(\d+)\s*[X×]\s*5-?\s*TON/i.exec(rm);
+      if (tm) {
+        var tn = parseInt(tm[1], 10);
+        var ttext = tlComposeText({ timeStart: time, from: fields.from, to: fields.to,
+          qty: tn, vehicleType: 'TONNERS',
+          coyLabel: fields.coyLabel, coyRaw: coyRaw, activity: fields.activity });
+        pushEntry('x', 'TONNERS', tn, ttext);
+      }
+    });
+    return res;
+  }
+
   function parseTROOPLIFT(worksheet, school) {
+    /* TEKONG columnar layout? (DATE/TIME/COY-UNIT/PURPOSE/PICK-UP/BUSES) */
+    var head = findTLColumnHeader(worksheet);
+    if (head) return parseTROOPLIFT_COLUMNS(worksheet, head, school);
     var res = { monthWord: null, tlDateMonths: [], entries: [], lines: [], unmatched: [], coySet: {}, days: {}, tbcDays: {} };
     var curDate = null;
     worksheet.eachRow({ includeEmpty: true }, function (row) {
