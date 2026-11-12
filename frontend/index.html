@@ -17,6 +17,39 @@
         <button type="button" class="mark" id="school-btn" aria-haspopup="true" aria-expanded="false" title="Switch school profile"><span class="smark">S4</span></button>
         <div class="school-menu" id="school-menu" role="menu" hidden></div>
       </div>
+      <div class="set-switch">
+        <button type="button" class="mark setbtn" id="btn-settings" aria-haspopup="true" aria-expanded="false" title="Settings">
+          <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+        </button>
+        <div class="settings-panel" id="settings-panel" hidden>
+          <div class="sp-h">Settings</div>
+          <div class="sp-row">
+            <span class="sp-k">Glass opacity</span>
+            <input type="range" id="set-tint" min="0" max="60" step="1" value="22">
+            <span class="sp-v" id="set-tint-v">22%</span>
+          </div>
+          <div class="sp-row">
+            <span class="sp-k">Refraction</span>
+            <input type="range" id="set-refract" min="100" max="300" step="5" value="215">
+            <span class="sp-v" id="set-refract-v">215%</span>
+          </div>
+          <div class="sp-row">
+            <span class="sp-k">Brightness</span>
+            <input type="range" id="set-bright" min="85" max="130" step="1" value="105">
+            <span class="sp-v" id="set-bright-v">105%</span>
+          </div>
+          <div class="sp-row">
+            <span class="sp-k">Sound volume</span>
+            <input type="range" id="set-vol" min="0" max="100" step="1" value="40">
+            <span class="sp-v" id="set-vol-v">40%</span>
+          </div>
+          <div class="sp-row sp-musicrow">
+            <span class="sp-k">Background music</span>
+            <button type="button" class="sp-toggle" id="set-music" aria-pressed="false"><span class="sp-lbl">Off</span></button>
+          </div>
+          <div class="sp-note">lofi loop · music starts after your next click (browser autoplay rule)</div>
+        </div>
+      </div>
       <div>
         <div class="t1">School <span class="sn">4</span> · Movement Builder</div>
       </div>

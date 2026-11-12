@@ -47,6 +47,10 @@
   --radius: 14px;
   --radius-sm: 10px;
   --topbar-h: 64px;
+  /* glass look — driven by the Settings panel (tint 0–.6, saturate %, brightness %) */
+  --glass-tint: .22;
+  --glass-sat: 215%;
+  --glass-glow: 105%;
   font-size: 15.5px;
 }
 * { box-sizing: border-box; }
@@ -889,12 +893,12 @@ body::before {
 .inset { border-radius: 12px; }
 .group::before, .surface::before, .card::before, .inset::before, .topbar::before, .sheet-panel::before {
   content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit;
-  /* lower tint = clearer view through; diagonal sheen = light bending across the pane */
+  /* tint/brightness come from the Settings panel; sheen = light bending across the pane */
   background:
     linear-gradient(118deg, rgba(255, 255, 255, .34), rgba(255, 255, 255, .07) 38%, rgba(255, 255, 255, .20) 58%, rgba(255, 255, 255, .05) 82%, rgba(255, 255, 255, .16)),
-    rgba(251, 246, 236, .22);
-  -webkit-backdrop-filter: blur(12px) saturate(215%) brightness(1.05);
-  backdrop-filter: blur(12px) saturate(215%) brightness(1.05);
+    rgba(251, 246, 236, var(--glass-tint));
+  -webkit-backdrop-filter: blur(12px) saturate(var(--glass-sat)) brightness(var(--glass-glow));
+  backdrop-filter: blur(12px) saturate(var(--glass-sat)) brightness(var(--glass-glow));
   box-shadow: inset 0 0 24px rgba(255, 255, 255, .12),
     inset 1.5px 1.5px 1px -.5px rgba(255, 255, 255, .85),
     inset -1.5px -1.5px 1px -.5px rgba(255, 255, 255, .50),
@@ -909,9 +913,9 @@ body::before {
   content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit;
   background:
     linear-gradient(118deg, rgba(255, 255, 255, .22), rgba(255, 255, 255, .05) 45%, rgba(255, 255, 255, .14) 62%, rgba(255, 255, 255, .12)),
-    rgba(251, 246, 236, .28);
-  -webkit-backdrop-filter: blur(14px) saturate(200%) brightness(1.04);
-  backdrop-filter: blur(14px) saturate(200%) brightness(1.04);
+    rgba(251, 246, 236, calc(var(--glass-tint) + .06));
+  -webkit-backdrop-filter: blur(14px) saturate(var(--glass-sat)) brightness(var(--glass-glow));
+  backdrop-filter: blur(14px) saturate(var(--glass-sat)) brightness(var(--glass-glow));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .7), inset 0 -1px 0 rgba(122, 95, 74, .08);
 }
 
@@ -938,9 +942,9 @@ body::before {
   content: ""; position: absolute; inset: 0; z-index: -1;
   background:
     linear-gradient(118deg, rgba(255, 255, 255, .30), rgba(255, 255, 255, .06) 40%, rgba(255, 255, 255, .18) 60%, rgba(255, 255, 255, .14)),
-    rgba(251, 246, 236, .30);
-  -webkit-backdrop-filter: blur(22px) saturate(220%) brightness(1.05);
-  backdrop-filter: blur(22px) saturate(220%) brightness(1.05);
+    rgba(251, 246, 236, calc(var(--glass-tint) + .08));
+  -webkit-backdrop-filter: blur(22px) saturate(var(--glass-sat)) brightness(var(--glass-glow));
+  backdrop-filter: blur(22px) saturate(var(--glass-sat)) brightness(var(--glass-glow));
   box-shadow: inset 0 0 24px rgba(255, 255, 255, .14),
     inset 1.5px 1.5px 1px -.5px rgba(255, 255, 255, .85),
     inset -1.5px -1.5px 1px -.5px rgba(255, 255, 255, .50);
@@ -980,9 +984,9 @@ body::before {
   content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit;
   background:
     linear-gradient(118deg, rgba(255, 255, 255, .28), rgba(255, 255, 255, .05) 40%, rgba(255, 255, 255, .16) 60%, rgba(255, 255, 255, .12)),
-    rgba(251, 246, 236, .26);
-  -webkit-backdrop-filter: blur(16px) saturate(215%) brightness(1.05);
-  backdrop-filter: blur(16px) saturate(215%) brightness(1.05);
+    rgba(251, 246, 236, calc(var(--glass-tint) + .04));
+  -webkit-backdrop-filter: blur(16px) saturate(var(--glass-sat)) brightness(var(--glass-glow));
+  backdrop-filter: blur(16px) saturate(var(--glass-sat)) brightness(var(--glass-glow));
   box-shadow: inset 1.5px 1.5px 1px -.5px rgba(255, 255, 255, .85), inset -1.5px -1.5px 1px -.5px rgba(255, 255, 255, .50);
 }
 .ov-dock .in { padding: 12px 16px; font-size: 12px; font-weight: 650; color: var(--ink); }
@@ -1006,6 +1010,60 @@ body.slide-r2 #planner-container { @starting-style { opacity: 0; transform: tran
 /* springy press on topbar buttons */
 .topbar button { transition: transform .18s cubic-bezier(.22, .9, .26, 1), background .18s ease, box-shadow .18s ease; }
 .topbar button:active { transform: scale(.94); }
+
+/* ------------------------------------------------------- settings */
+.set-switch { position: relative; }
+.setbtn {
+  width: 38px; height: 38px; border-radius: 12px; flex: 0 0 38px;
+  background: var(--pri); color: #F4F1EA;
+  display: grid; place-items: center;
+  border: 0; cursor: pointer; font-family: inherit;
+  box-shadow: 0 4px 12px rgba(110, 47, 28, .24);
+}
+.setbtn svg { width: 19px; height: 19px; fill: currentColor; }
+.setbtn[aria-expanded="true"] { background: var(--pri-strong); }
+.settings-panel {
+  position: absolute; top: 46px; left: 0; z-index: 70;
+  width: 288px; padding: 14px 16px 10px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, .72);
+  box-shadow: 0 14px 34px rgba(46, 32, 22, .26);
+  isolation: isolate; overflow: hidden;
+}
+.settings-panel::before {
+  content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit;
+  background:
+    linear-gradient(118deg, rgba(255, 255, 255, .26), rgba(255, 255, 255, .06) 40%, rgba(255, 255, 255, .16) 60%, rgba(255, 255, 255, .10)),
+    rgba(251, 246, 236, calc(var(--glass-tint) + .30));
+  -webkit-backdrop-filter: blur(20px) saturate(var(--glass-sat)) brightness(var(--glass-glow));
+  backdrop-filter: blur(20px) saturate(var(--glass-sat)) brightness(var(--glass-glow));
+  box-shadow: inset 1.5px 1.5px 1px -.5px rgba(255, 255, 255, .8), inset -1.5px -1.5px 1px -.5px rgba(255, 255, 255, .45);
+}
+.settings-panel[hidden] { display: none; }
+.sp-h {
+  font-size: 10.5px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--pri); margin: 0 0 10px;
+}
+.sp-row { display: grid; grid-template-columns: 108px 1fr 44px; align-items: center; gap: 8px; padding: 6px 0; }
+.sp-row .sp-k { font-size: 12px; font-weight: 650; color: var(--ink-soft); }
+.sp-row .sp-v { font-family: var(--mono); font-size: 11px; font-weight: 700; color: var(--ink); text-align: right; font-variant-numeric: tabular-nums; }
+.sp-row input[type="range"] { width: 100%; accent-color: var(--pri); cursor: pointer; height: 20px; }
+.sp-musicrow {
+  grid-template-columns: 108px 1fr;
+  border-top: 1px solid rgba(122, 95, 74, .18);
+  margin-top: 6px; padding-top: 10px;
+}
+.sp-toggle {
+  justify-self: start; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+  padding: 5px 14px; border-radius: 999px;
+  border: 1px solid var(--line-strong); background: var(--paper); color: var(--ink-soft);
+  transition: background .18s ease, color .18s ease, border-color .18s ease;
+}
+.sp-toggle.on { background: var(--pri); border-color: var(--pri); color: #F4F1EA; }
+.sp-note { margin: 8px 0 4px; font-size: 10px; color: var(--ink-faint); line-height: 1.4; }
+@media (max-width: 640px) {
+  .settings-panel { width: min(288px, calc(100vw - 32px)); }
+}
 
 /* ----------------------------------------------------------- print */
 @media print {

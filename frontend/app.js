@@ -2586,13 +2586,13 @@
      fetched + decoded once (kicked off at pointerdown, within the gesture),
      then a buffer source plays per click — reliable in every browser.
      Any failure is warned to the console instead of being swallowed. */
-  var tapCtx = null, tapBuf = null, tapLoading = false;
+  var tapCtx = null, tapBuf = null, tapLoading = false, tapVol = 0.4;
   function tapPlayBuf() {
     try {
       var src = tapCtx.createBufferSource();
       src.buffer = tapBuf;
       var g = tapCtx.createGain();
-      g.gain.value = 0.4;
+      g.gain.value = tapVol;
       src.connect(g); g.connect(tapCtx.destination);
       src.start();
     } catch (e) { console.warn('tap sound failed:', e && e.message); }
@@ -2626,6 +2626,127 @@
     document.addEventListener('click', playTap, true);
   }
 
+  /* -------------------------------------------------------- settings -- */
+  /* glass look + audio preferences, stored app-wide (not per school) */
+  var PREF_DEFAULTS = { tint: 22, sat: 215, glow: 105, vol: 40, music: false };
+  var prefs = null, musicAudio = null, musicWaiting = false;
+
+  function loadPrefs() {
+    try {
+      var p = JSON.parse(lsGet('tcrs:prefs') || '{}');
+      var out = {}, k;
+      for (k in PREF_DEFAULTS) out[k] = (p[k] !== undefined ? p[k] : PREF_DEFAULTS[k]);
+      return out;
+    } catch (e) {
+      var copy = {}, k2;
+      for (k2 in PREF_DEFAULTS) copy[k2] = PREF_DEFAULTS[k2];
+      return copy;
+    }
+  }
+  function savePrefs() {
+    try { lsSet('tcrs:prefs', JSON.stringify(prefs)); } catch (e) { }
+  }
+  function applyGlassPrefs() {
+    var r = document.documentElement.style;
+    r.setProperty('--glass-tint', (prefs.tint / 100).toFixed(3));
+    r.setProperty('--glass-sat', prefs.sat + '%');
+    r.setProperty('--glass-glow', prefs.glow + '%');
+  }
+  function musicVol() { return Math.max(0, Math.min(1, tapVol * 0.6)); }
+  function musicStart() {
+    try {
+      if (!musicAudio) {
+        musicAudio = new Audio('lofi.mp3');
+        musicAudio.loop = true;
+        musicAudio.preload = 'auto';
+      }
+      musicAudio.volume = musicVol();
+      var pr = musicAudio.play();
+      if (pr && pr.catch) pr.catch(function () {
+        /* autoplay blocked — start on the next user gesture */
+        if (musicWaiting) return;
+        musicWaiting = true;
+        var go = function () {
+          musicWaiting = false;
+          document.removeEventListener('pointerdown', go, true);
+          if (prefs.music) musicStart();
+        };
+        document.addEventListener('pointerdown', go, true);
+      });
+    } catch (e) { console.warn('music failed:', e && e.message); }
+  }
+  function musicStop() {
+    if (musicAudio) { try { musicAudio.pause(); } catch (e) { } }
+    musicWaiting = false;
+  }
+  function musicSyncBtn() {
+    var b = $('set-music');
+    if (!b) return;
+    b.classList.toggle('on', !!prefs.music);
+    b.setAttribute('aria-pressed', prefs.music ? 'true' : 'false');
+    b.querySelector('.sp-lbl').textContent = prefs.music ? 'On' : 'Off';
+  }
+  function syncSettingsUI() {
+    var set = function (id, v, label) {
+      var el = $(id);
+      if (el) el.value = v;
+      var lbl = $(id + '-v');
+      if (lbl) lbl.textContent = label;
+    };
+    set('set-tint', prefs.tint, prefs.tint + '%');
+    set('set-refract', prefs.sat, prefs.sat + '%');
+    set('set-bright', prefs.glow, prefs.glow + '%');
+    set('set-vol', prefs.vol, prefs.vol + '%');
+    musicSyncBtn();
+  }
+
+  function initSettings() {
+    var btn = $('btn-settings'), panel = $('settings-panel');
+    if (!btn || !panel) return;   // pages without the panel (test suites)
+    prefs = loadPrefs();
+    tapVol = prefs.vol / 100;
+    applyGlassPrefs();
+    syncSettingsUI();
+
+    function close() { panel.hidden = true; btn.setAttribute('aria-expanded', 'false'); }
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var open = panel.hidden;
+      panel.hidden = !open;
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      if (open) syncSettingsUI();
+    });
+    document.addEventListener('click', function (e) {
+      if (!panel.hidden && !(e.target.closest && e.target.closest('.set-switch'))) close();
+    });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
+
+    var bindRange = function (id, key, apply) {
+      $(id).addEventListener('input', function () {
+        prefs[key] = parseInt(this.value, 10);
+        $(id + '-v').textContent = prefs[key] + '%';
+        apply();
+        savePrefs();
+      });
+    };
+    bindRange('set-tint', 'tint', applyGlassPrefs);
+    bindRange('set-refract', 'sat', applyGlassPrefs);
+    bindRange('set-bright', 'glow', applyGlassPrefs);
+    bindRange('set-vol', 'vol', function () {
+      tapVol = prefs.vol / 100;
+      if (musicAudio) musicAudio.volume = musicVol();
+    });
+
+    $('set-music').addEventListener('click', function () {
+      prefs.music = !prefs.music;
+      musicSyncBtn();
+      savePrefs();
+      if (prefs.music) musicStart(); else musicStop();
+    });
+
+    if (prefs.music) musicStart();   // may be blocked — musicStart waits for a gesture
+  }
+
   (function () {
     var saved = parseInt(lsGet('tcrs:school'), 10);
     if (saved >= 1 && saved <= 4 && !/^#auto/.test(location.hash)) state.school = saved;
@@ -2634,6 +2755,7 @@
   initSchoolMenu();
   initOverlays();
   initTapSound();
+  initSettings();
   applySchoolTexts();
   setTab(state.tab);   // sync visibility with the (possibly hash-set) tab
   syncControls();

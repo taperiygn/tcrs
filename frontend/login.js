@@ -1,13 +1,19 @@
 (function () {
   /* tap sound on every click (same tick as the builder app) — Web Audio,
-     decoded once at first pointerdown, a buffer source per click */
+     decoded once at first pointerdown, a buffer source per click.
+     Volume follows the app's Settings panel (tcrs:prefs). */
+  var tapVol = 0.4;
+  try {
+    var p = JSON.parse(localStorage.getItem('tcrs:prefs') || '{}');
+    if (p.vol !== undefined) tapVol = Math.max(0, Math.min(1, p.vol / 100));
+  } catch (e) { }
   var tapCtx = null, tapBuf = null, tapLoading = false;
   function tapPlayBuf() {
     try {
       var src = tapCtx.createBufferSource();
       src.buffer = tapBuf;
       var g = tapCtx.createGain();
-      g.gain.value = 0.4;
+      g.gain.value = tapVol;
       src.connect(g); g.connect(tapCtx.destination);
       src.start();
     } catch (e) { console.warn('tap sound failed:', e && e.message); }
