@@ -7,34 +7,35 @@
    ===================================================================== */
 :root {
   /* the palette — Terra Deep */
-  --bg: hsl(calc(var(--theme-h) + 22), 55.6%, 91.2%);                        /* base — warm sand page           */
-  --surface: hsl(calc(var(--theme-h) + 20), 41.5%, 79.2%);                   /* surface — clay card tint (glass shows through) */
+  --bg: hsl(calc(var(--theme-h) + 22), 55.6%, calc(91.2% * var(--theme-b)));                        /* base — warm sand page           */
+  --surface: hsl(calc(var(--theme-h) + 20), 41.5%, calc(79.2% * var(--theme-b)));                   /* surface — clay card tint (glass shows through) */
   --theme-h: 14;                        /* theme hue — driven by the Settings colour slider */
-  --pri: hsl(var(--theme-h), 57%, 35%); /* primary — deep rust at hue 14     */
-  --pri-strong: hsl(var(--theme-h), 59%, 27%);  /* primary pressed / deep text */
-  --pri-soft: hsl(var(--theme-h), 48%, 88%);    /* primary tint                */
-  --pri-deep: hsl(calc(var(--theme-h) + 7), 40.6%, 74.9%);                  /* primary border/selection tint   */
-  --paper: hsl(calc(var(--theme-h) + 26), 65.2%, 95.5%);                     /* inputs, menus, cells on a card  */
-  --accent: hsl(calc(var(--theme-h) + 131), 27.9%, 33.7%);                    /* accent — forest green (rails, hovers) */
-  --spot: hsl(calc(var(--theme-h) + -173), 21.7%, 68.4%);                      /* spot — info / activation blue   */
+  --theme-b: 1;                         /* theme brightness — lightness multiplier (1 = neutral) */
+  --pri: hsl(var(--theme-h), 57%, calc(35% * var(--theme-b))); /* primary — deep rust at hue 14     */
+  --pri-strong: hsl(var(--theme-h), 59%, calc(27% * var(--theme-b)));  /* primary pressed / deep text */
+  --pri-soft: hsl(var(--theme-h), 48%, calc(88% * var(--theme-b)));    /* primary tint                */
+  --pri-deep: hsl(calc(var(--theme-h) + 7), 40.6%, calc(74.9% * var(--theme-b)));                  /* primary border/selection tint   */
+  --paper: hsl(calc(var(--theme-h) + 26), 65.2%, calc(95.5% * var(--theme-b)));                     /* inputs, menus, cells on a card  */
+  --accent: hsl(calc(var(--theme-h) + 131), 27.9%, calc(33.7% * var(--theme-b)));                    /* accent — forest green (rails, hovers) */
+  --spot: hsl(calc(var(--theme-h) + -173), 21.7%, calc(68.4% * var(--theme-b)));                      /* spot — info / activation blue   */
 
-  --surface-2: hsl(calc(var(--theme-h) + 21), 44.7%, 85.1%);                 /* insets, sticky group heads      */
-  --line: hsl(calc(var(--theme-h) + 18), 35.6%, 71.4%);
-  --line-strong: hsl(calc(var(--theme-h) + 18), 28.2%, 61.8%);
+  --surface-2: hsl(calc(var(--theme-h) + 21), 44.7%, calc(85.1% * var(--theme-b)));                 /* insets, sticky group heads      */
+  --line: hsl(calc(var(--theme-h) + 18), 35.6%, calc(71.4% * var(--theme-b)));
+  --line-strong: hsl(calc(var(--theme-h) + 18), 28.2%, calc(61.8% * var(--theme-b)));
 
   /* text */
-  --ink: hsl(calc(var(--theme-h) + 12), 33.3%, 16.5%);
-  --ink-soft: hsl(calc(var(--theme-h) + 13), 21.8%, 34.1%);
-  --ink-faint: hsl(calc(var(--theme-h) + 15), 18.8%, 55.1%);
+  --ink: hsl(calc(var(--theme-h) + 12), 33.3%, calc(16.5% * var(--theme-b)));
+  --ink-soft: hsl(calc(var(--theme-h) + 13), 21.8%, calc(34.1% * var(--theme-b)));
+  --ink-faint: hsl(calc(var(--theme-h) + 15), 18.8%, calc(55.1% * var(--theme-b)));
 
   /* semantic tints — earthy analogous sweep around the primary rust
      (gold → lime → emerald → teal-cyan → rose → mauve) */
-  --mint: hsl(calc(var(--theme-h) + 95), 32.4%, 86.7%);  --mint-ink: hsl(calc(var(--theme-h) + 100), 37.7%, 29.6%);   /* emerald  — ok / success        */
-  --peach: hsl(calc(var(--theme-h) + 42), 45.7%, 82%); --peach-ink: hsl(calc(var(--theme-h) + 49), 59.7%, 27.3%);  /* lime-gold — troop-lift / buses */
-  --butter: hsl(calc(var(--theme-h) + 29), 74.7%, 81.4%); --butter-ink: hsl(calc(var(--theme-h) + 30), 82.5%, 26.9%); /* gold     — warn / tight / TBC */
-  --sky: hsl(calc(var(--theme-h) + 175), 22.8%, 88.8%);   --sky-ink: hsl(calc(var(--theme-h) + 176), 32.9%, 32.7%);    /* cyan-blue — ICRF / info        */
-  --rose: hsl(calc(var(--theme-h) + 5), 72.2%, 84.5%);  --rose-ink: hsl(calc(var(--theme-h) + 0), 77.2%, 31%);   /* red-orange — clash / error     */
-  --plum: hsl(calc(var(--theme-h) + -32), 20%, 87.3%);  --plum-ink: hsl(calc(var(--theme-h) + -33), 29.2%, 37.6%);   /* mauve     — activation / perm  */
+  --mint: hsl(calc(var(--theme-h) + 95), 32.4%, calc(86.7% * var(--theme-b)));  --mint-ink: hsl(calc(var(--theme-h) + 100), 37.7%, calc(29.6% * var(--theme-b)));   /* emerald  — ok / success        */
+  --peach: hsl(calc(var(--theme-h) + 42), 45.7%, calc(82% * var(--theme-b))); --peach-ink: hsl(calc(var(--theme-h) + 49), 59.7%, calc(27.3% * var(--theme-b)));  /* lime-gold — troop-lift / buses */
+  --butter: hsl(calc(var(--theme-h) + 29), 74.7%, calc(81.4% * var(--theme-b))); --butter-ink: hsl(calc(var(--theme-h) + 30), 82.5%, calc(26.9% * var(--theme-b))); /* gold     — warn / tight / TBC */
+  --sky: hsl(calc(var(--theme-h) + 175), 22.8%, calc(88.8% * var(--theme-b)));   --sky-ink: hsl(calc(var(--theme-h) + 176), 32.9%, calc(32.7% * var(--theme-b)));    /* cyan-blue — ICRF / info        */
+  --rose: hsl(calc(var(--theme-h) + 5), 72.2%, calc(84.5% * var(--theme-b)));  --rose-ink: hsl(calc(var(--theme-h) + 0), 77.2%, calc(31% * var(--theme-b)));   /* red-orange — clash / error     */
+  --plum: hsl(calc(var(--theme-h) + -32), 20%, calc(87.3% * var(--theme-b)));  --plum-ink: hsl(calc(var(--theme-h) + -33), 29.2%, calc(37.6% * var(--theme-b)));   /* mauve     — activation / perm  */
 
   --accent-soft: var(--pri-soft);
   --red: var(--rose-ink);
@@ -43,8 +44,8 @@
 
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --sans: -apple-system, BlinkMacSystemFont, system-ui, "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
-  --shadow: 0 1px 2px hsla(calc(var(--theme-h) + 12), 33.3%, 16.5%,.05), 0 4px 14px hsla(calc(var(--theme-h) + 12), 33.3%, 16.5%,.06);
-  --shadow-lift: 0 2px 4px hsla(calc(var(--theme-h) + 12), 33.3%, 16.5%,.06), 0 10px 26px hsla(calc(var(--theme-h) + 12), 33.3%, 16.5%,.10);
+  --shadow: 0 1px 2px hsla(calc(var(--theme-h) + 12), 33.3%, calc(16.5% * var(--theme-b)),.05), 0 4px 14px hsla(calc(var(--theme-h) + 12), 33.3%, calc(16.5% * var(--theme-b)),.06);
+  --shadow-lift: 0 2px 4px hsla(calc(var(--theme-h) + 12), 33.3%, calc(16.5% * var(--theme-b)),.06), 0 10px 26px hsla(calc(var(--theme-h) + 12), 33.3%, calc(16.5% * var(--theme-b)),.10);
   --radius: 14px;
   --radius-sm: 10px;
   --topbar-h: 64px;
@@ -98,17 +99,17 @@ body {
 .brand .mark {
   width: 38px; height: 38px; border-radius: 12px; flex: 0 0 38px;
   background: var(--pri);
-  color: hsl(calc(var(--theme-h) + 28), 31.3%, 93.7%); font-weight: 800; font-size: 13.5px;
+  color: hsl(calc(var(--theme-h) + 28), 31.3%, calc(93.7% * var(--theme-b))); font-weight: 800; font-size: 13.5px;
   display: grid; place-items: center; letter-spacing: .4px;
   border: 0; cursor: pointer; font-family: inherit;
   transition: transform .15s ease, box-shadow .15s ease;
 }
-.brand .mark:hover, .brand .mark[aria-expanded="true"] { transform: translateY(-1px); box-shadow: 0 4px 12px hsla(var(--theme-h), 59%, 27%, .28); }
+.brand .mark:hover, .brand .mark[aria-expanded="true"] { transform: translateY(-1px); box-shadow: 0 4px 12px hsla(var(--theme-h), 59%, calc(27% * var(--theme-b)), .28); }
 .school-switch { position: relative; }
 .school-menu {
   position: absolute; top: 46px; left: 0; z-index: 60; min-width: 210px;
-  background: var(--paper); border: 1px solid var(--line, hsl(calc(var(--theme-h) + 18), 35.6%, 71.4%)); border-radius: 14px;
-  box-shadow: 0 12px 32px hsla(calc(var(--theme-h) + 12), 33.3%, 16.5%,.16); padding: 6px;
+  background: var(--paper); border: 1px solid var(--line, hsl(calc(var(--theme-h) + 18), 35.6%, calc(71.4% * var(--theme-b)))); border-radius: 14px;
+  box-shadow: 0 12px 32px hsla(calc(var(--theme-h) + 12), 33.3%, calc(16.5% * var(--theme-b)),.16); padding: 6px;
 }
 .school-menu[hidden] { display: none; }
 .school-menu button {
@@ -116,11 +117,11 @@ body {
   padding: 8px 10px; border: 0; background: none; border-radius: 9px;
   font: inherit; font-size: 13px; font-weight: 650; color: var(--ink); cursor: pointer; text-align: left;
 }
-.school-menu button:hover { background: hsl(calc(var(--theme-h) + 21), 44.7%, 85.1%); }
+.school-menu button:hover { background: hsl(calc(var(--theme-h) + 21), 44.7%, calc(85.1% * var(--theme-b))); }
 .school-menu button.on { background: var(--pri-soft); }
 .school-menu .sm-mark {
   width: 28px; height: 28px; border-radius: 9px; flex: 0 0 28px;
-  background: var(--pri); color: hsl(calc(var(--theme-h) + 28), 31.3%, 93.7%); font-size: 11.5px; font-weight: 800;
+  background: var(--pri); color: hsl(calc(var(--theme-h) + 28), 31.3%, calc(93.7% * var(--theme-b))); font-size: 11.5px; font-weight: 800;
   display: grid; place-items: center;
 }
 .school-menu .sm-sub { display: block; font-size: 10.5px; font-weight: 600; color: var(--ink-faint); }
@@ -139,8 +140,8 @@ body {
 .monthbtn .m-caret { width: 14px; height: 14px; fill: var(--ink-faint); }
 .month-menu {
   position: absolute; top: 44px; left: 0; z-index: 60; min-width: 230px;
-  background: var(--paper); border: 1px solid var(--line, hsl(calc(var(--theme-h) + 18), 35.6%, 71.4%)); border-radius: 14px;
-  box-shadow: 0 12px 32px hsla(calc(var(--theme-h) + 12), 33.3%, 16.5%,.16); padding: 6px;
+  background: var(--paper); border: 1px solid var(--line, hsl(calc(var(--theme-h) + 18), 35.6%, calc(71.4% * var(--theme-b)))); border-radius: 14px;
+  box-shadow: 0 12px 32px hsla(calc(var(--theme-h) + 12), 33.3%, calc(16.5% * var(--theme-b)),.16); padding: 6px;
 }
 .month-menu[hidden] { display: none; }
 .month-menu > button {
@@ -148,11 +149,11 @@ body {
   padding: 8px 10px; border: 0; background: none; border-radius: 9px;
   font: inherit; font-size: 13px; font-weight: 650; color: var(--ink); cursor: pointer; text-align: left;
 }
-.month-menu > button:hover { background: hsl(calc(var(--theme-h) + 21), 44.7%, 85.1%); }
+.month-menu > button:hover { background: hsl(calc(var(--theme-h) + 21), 44.7%, calc(85.1% * var(--theme-b))); }
 .month-menu > button.on { background: var(--pri-soft); }
 .month-menu .sm-mark {
   width: 28px; height: 28px; border-radius: 9px; flex: 0 0 28px;
-  background: var(--pri); color: hsl(calc(var(--theme-h) + 28), 31.3%, 93.7%); font-size: 11.5px; font-weight: 800;
+  background: var(--pri); color: hsl(calc(var(--theme-h) + 28), 31.3%, calc(93.7% * var(--theme-b))); font-size: 11.5px; font-weight: 800;
   display: grid; place-items: center;
 }
 .month-menu .sm-sub { display: block; font-size: 10.5px; font-weight: 600; color: var(--ink-faint); }
@@ -169,7 +170,7 @@ body {
 .mm-new button {
   font: inherit; font-size: 11.5px; font-weight: 750; cursor: pointer; margin-left: auto;
   padding: 5px 10px; border-radius: 8px;
-  border: 1px solid var(--pri); background: var(--pri); color: hsl(calc(var(--theme-h) + 28), 31.3%, 93.7%);
+  border: 1px solid var(--pri); background: var(--pri); color: hsl(calc(var(--theme-h) + 28), 31.3%, calc(93.7% * var(--theme-b)));
 }
 .mm-new button:hover { background: var(--pri-strong); }
 .brand .t1 { font-weight: 700; font-size: 16px; white-space: nowrap; color: var(--ink); letter-spacing: -0.02em; }
@@ -206,10 +207,10 @@ body {
   color: var(--ink);
 }
 .btn svg { width: 14px; height: 14px; fill: currentColor; }
-.btn-primary { background: var(--pri); color: hsl(calc(var(--theme-h) + 28), 31.3%, 93.7%); }
+.btn-primary { background: var(--pri); color: hsl(calc(var(--theme-h) + 28), 31.3%, calc(93.7% * var(--theme-b))); }
 .btn-primary:hover:not(:disabled) { background: var(--pri-strong); }
 .btn-soft { background: var(--surface); border-color: var(--line-strong); color: var(--ink-soft); }
-.btn-soft:hover:not(:disabled) { background: var(--bg); color: var(--ink); border-color: hsl(calc(var(--theme-h) + 64), 12.7%, 69%); }
+.btn-soft:hover:not(:disabled) { background: var(--bg); color: var(--ink); border-color: hsl(calc(var(--theme-h) + 64), 12.7%, calc(69% * var(--theme-b))); }
 .btn:disabled { opacity: .45; cursor: not-allowed; }
 .btn:focus-visible, .tabs button:focus-visible, .seg button:focus-visible {
   outline: 2px solid var(--pri); outline-offset: 2px;
@@ -245,14 +246,14 @@ body.tab-grid .rail { display: none; }
 #rail-toggle {
   align-self: flex-start;
   width: 26px; height: 66px; padding: 0;
-  border: 1px solid var(--line, hsl(calc(var(--theme-h) + 18), 35.6%, 71.4%)); border-radius: 9px;
+  border: 1px solid var(--line, hsl(calc(var(--theme-h) + 18), 35.6%, calc(71.4% * var(--theme-b)))); border-radius: 9px;
   background: var(--paper); color: var(--ink-faint);
   font-size: 15px; line-height: 1; cursor: pointer;
-  box-shadow: 0 1px 4px hsla(calc(var(--theme-h) + 12), 33.3%, 16.5%,.08);
+  box-shadow: 0 1px 4px hsla(calc(var(--theme-h) + 12), 33.3%, calc(16.5% * var(--theme-b)),.08);
   transition: color .15s ease, box-shadow .15s ease, transform .15s ease;
   justify-self: start;
 }
-#rail-toggle:hover { color: var(--accent, hsl(calc(var(--theme-h) + 131), 27.9%, 33.7%)); box-shadow: 0 3px 10px hsla(calc(var(--theme-h) + 12), 33.3%, 16.5%,.14); }
+#rail-toggle:hover { color: var(--accent, hsl(calc(var(--theme-h) + 131), 27.9%, calc(33.7% * var(--theme-b)))); box-shadow: 0 3px 10px hsla(calc(var(--theme-h) + 12), 33.3%, calc(16.5% * var(--theme-b)),.14); }
 body.rail-collapsed .layout { grid-template-columns: 34px minmax(0, 1fr); gap: 14px; }
 /* the live-sheet tab hides the rail but must not keep its collapsed gutter */
 body.tab-grid.rail-collapsed .layout { grid-template-columns: minmax(0, 1fr); }
@@ -298,7 +299,7 @@ body.rail-collapsed .workspace { min-width: 0; }
 .badge-tl { background: var(--peach); color: var(--peach-ink); }
 .upzone .name { font-weight: 650; font-size: 13.5px; letter-spacing: -0.01em; }
 .upzone .hint { font-size: 11.5px; color: var(--ink-soft); margin-top: 2px; line-height: 1.4; }
-.upcard.done .upzone { border-style: solid; border-color: hsl(calc(var(--theme-h) + 125), 17%, 71.2%); background: hsl(calc(var(--theme-h) + 80), 20%, 93.1%); }
+.upcard.done .upzone { border-style: solid; border-color: hsl(calc(var(--theme-h) + 125), 17%, calc(71.2% * var(--theme-b))); background: hsl(calc(var(--theme-h) + 80), 20%, calc(93.1% * var(--theme-b))); }
 .upcard.done .upzone .hint { color: var(--mint-ink); }
 
 .upstatus { padding: 9px 14px 11px; border-top: 1px solid var(--line); font-size: 12px; }
@@ -309,7 +310,7 @@ body.rail-collapsed .workspace { min-width: 0; }
   border: none; background: var(--rose); padding: 3px 10px;
   border-radius: 999px; font-weight: 600; transition: background .15s;
 }
-.upstatus .remove:hover { background: hsl(calc(var(--theme-h) + 10), 43.8%, 87.5%); }
+.upstatus .remove:hover { background: hsl(calc(var(--theme-h) + 10), 43.8%, calc(87.5% * var(--theme-b))); }
 .upstatus .err { color: var(--rose-ink); font-weight: 600; padding: 2px 0; }
 .upstatus .sheetpick { margin-top: 8px; }
 .upstatus .sheetpick label { display: flex; align-items: center; gap: 8px; color: var(--ink-soft); font-weight: 600; }
@@ -333,7 +334,7 @@ body.rail-collapsed .workspace { min-width: 0; }
   border: 1px solid var(--line-strong);
 }
 .monthbanner .cal .top {
-  background: var(--pri); color: hsl(calc(var(--theme-h) + 28), 31.3%, 93.7%);
+  background: var(--pri); color: hsl(calc(var(--theme-h) + 28), 31.3%, calc(93.7% * var(--theme-b)));
   font-size: 9px; font-weight: 700; letter-spacing: .14em;
   width: 100%; text-align: center; padding: 2px 0 1px;
 }
@@ -353,7 +354,7 @@ body.rail-collapsed .workspace { min-width: 0; }
   background: var(--surface); color: var(--ink-faint);
   font-variant-numeric: tabular-nums;
 }
-.chip:hover { border-color: hsl(calc(var(--theme-h) + 62), 12.4%, 70%); color: var(--ink-soft); }
+.chip:hover { border-color: hsl(calc(var(--theme-h) + 62), 12.4%, calc(70% * var(--theme-b))); color: var(--ink-soft); }
 .chip.on {
   color: var(--ink);
   border-color: var(--chip-c, var(--pri));
@@ -428,7 +429,7 @@ body.rail-collapsed .workspace { min-width: 0; }
 .clash-item.sev-perm { background: var(--plum); }
 .clash-badge {
   flex: none; font-size: 10.5px; font-weight: 800; letter-spacing: .05em;
-  padding: 2px 8px; border-radius: 999px; color: hsl(calc(var(--theme-h) + 28), 31.3%, 93.7%);
+  padding: 2px 8px; border-radius: 999px; color: hsl(calc(var(--theme-h) + 28), 31.3%, calc(93.7% * var(--theme-b)));
 }
 .clash-item.sev-red .clash-badge { background: var(--rose-ink); }
 .clash-item.sev-orange .clash-badge { background: var(--butter-ink); }
@@ -454,8 +455,8 @@ body.rail-collapsed .workspace { min-width: 0; }
 }
 .plan-btn:hover:not(:disabled) { background: var(--bg); color: var(--ink); }
 .plan-btn:disabled { opacity: .45; cursor: not-allowed; }
-.plan-btn.plan-submit { background: var(--pri); border-color: var(--pri); color: hsl(calc(var(--theme-h) + 28), 31.3%, 93.7%); }
-.plan-btn.plan-submit:hover:not(:disabled) { background: var(--pri-strong); color: hsl(calc(var(--theme-h) + 28), 31.3%, 93.7%); }
+.plan-btn.plan-submit { background: var(--pri); border-color: var(--pri); color: hsl(calc(var(--theme-h) + 28), 31.3%, calc(93.7% * var(--theme-b))); }
+.plan-btn.plan-submit:hover:not(:disabled) { background: var(--pri-strong); color: hsl(calc(var(--theme-h) + 28), 31.3%, calc(93.7% * var(--theme-b))); }
 .plan-hint { padding: 2px 18px 8px; font-size: 11.5px; color: var(--ink-faint); }
 .plan-dayhead {
   display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap;
@@ -591,7 +592,7 @@ body.rail-collapsed .workspace { min-width: 0; }
 .chead {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
   padding: 11px 17px;
-  background: linear-gradient(90deg, hsla(var(--theme-h), 57%, 35%, .38), hsla(var(--theme-h), 57%, 35%, .14));
+  background: linear-gradient(90deg, hsla(var(--theme-h), 57%, calc(35% * var(--theme-b)), .38), hsla(var(--theme-h), 57%, calc(35% * var(--theme-b)), .14));
   border-radius: var(--radius) var(--radius) 0 0;
   border-bottom: 1px solid var(--line);
   position: sticky; top: var(--topbar-h); z-index: 5;
@@ -621,9 +622,9 @@ table.mov thead th {
   background: var(--surface);
   white-space: nowrap;
 }
-table.mov tbody td { padding: 9px 13px; border-bottom: 1px solid hsl(calc(var(--theme-h) + 70), 20.5%, 71.4%); vertical-align: top; }
+table.mov tbody td { padding: 9px 13px; border-bottom: 1px solid hsl(calc(var(--theme-h) + 70), 20.5%, calc(71.4% * var(--theme-b))); vertical-align: top; }
 table.mov tbody tr:last-child td { border-bottom: none; }
-table.mov tbody tr:hover td { background: hsl(calc(var(--theme-h) + 67), 34.2%, 85.1%); }
+table.mov tbody tr:hover td { background: hsl(calc(var(--theme-h) + 67), 34.2%, calc(85.1% * var(--theme-b))); }
 table.mov .t {
   font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--ink);
   white-space: nowrap; font-variant-numeric: tabular-nums;
@@ -680,7 +681,7 @@ table.mov .datecell .dow { color: var(--pri); font-weight: 700; margin-left: 6px
   display: flex; align-items: center; justify-content: space-between; gap: 14px;
   padding: 13px 18px; flex-wrap: wrap;
   border-bottom: 1px solid var(--line);
-  background: hsl(calc(var(--theme-h) + 67), 30.9%, 89.2%);
+  background: hsl(calc(var(--theme-h) + 67), 30.9%, calc(89.2% * var(--theme-b)));
 }
 .sheet-title { display: flex; align-items: center; gap: 11px; }
 .sheet-title svg { width: 20px; height: 20px; fill: var(--pri); }
@@ -703,7 +704,7 @@ table.mov .datecell .dow { color: var(--pri); font-weight: 700; margin-left: 6px
 .searchwrap input::placeholder { color: var(--ink-faint); }
 
 .btn.sm { padding: 6.5px 13px; font-size: 12.5px; }
-.btn.armed { background: var(--rose); color: var(--rose-ink); border-color: hsl(calc(var(--theme-h) + 7), 51.4%, 71%); }
+.btn.armed { background: var(--rose); color: var(--rose-ink); border-color: hsl(calc(var(--theme-h) + 7), 51.4%, calc(71% * var(--theme-b))); }
 
 .sheet-scroll { flex: 1; overflow: auto; outline: none; }
 .sheet-table {
@@ -716,7 +717,7 @@ table.mov .datecell .dow { color: var(--pri); font-weight: 700; margin-left: 6px
   text-align: left;
   font-size: 10px; font-weight: 750; letter-spacing: .11em;
   text-transform: uppercase; color: var(--ink-soft);
-  background: hsl(calc(var(--theme-h) + 21), 44.7%, 85.1%);
+  background: hsl(calc(var(--theme-h) + 21), 44.7%, calc(85.1% * var(--theme-b)));
   border-bottom: 1px solid var(--line-strong);
   border-right: 1px solid var(--line);
   padding: 9px 12px; white-space: nowrap;
@@ -725,14 +726,14 @@ table.mov .datecell .dow { color: var(--pri); font-weight: 700; margin-left: 6px
 .sheet-table th.h-gutter { width: 64px; }
 .sheet-table tbody td {
   padding: 6.5px 12px;
-  border-bottom: 1px solid hsl(calc(var(--theme-h) + 69), 21%, 75.7%);
-  border-right: 1px solid hsl(calc(var(--theme-h) + 75), 20%, 79.4%);
+  border-bottom: 1px solid hsl(calc(var(--theme-h) + 69), 21%, calc(75.7% * var(--theme-b)));
+  border-right: 1px solid hsl(calc(var(--theme-h) + 75), 20%, calc(79.4% * var(--theme-b)));
   white-space: nowrap;
   max-width: 320px; overflow: hidden; text-overflow: ellipsis;
   cursor: text;
 }
-.sheet-table tbody tr:nth-child(even) td { background: hsl(calc(var(--theme-h) + 21), 44.7%, 85.1%); }
-.sheet-table tbody tr:hover td { background: hsl(calc(var(--theme-h) + 25), 48.3%, 88.6%); }
+.sheet-table tbody tr:nth-child(even) td { background: hsl(calc(var(--theme-h) + 21), 44.7%, calc(85.1% * var(--theme-b))); }
+.sheet-table tbody tr:hover td { background: hsl(calc(var(--theme-h) + 25), 48.3%, calc(88.6% * var(--theme-b))); }
 .sheet-table td.noclick { cursor: default; }
 .sheet-table td.c-activity { white-space: normal; }
 .sheet-table td.c-qty, .sheet-table td.c-qtl { font-variant-numeric: tabular-nums; }
@@ -742,7 +743,7 @@ table.mov .datecell .dow { color: var(--pri); font-weight: 700; margin-left: 6px
 .sheet-table td.c-qty { text-align: right; }
 .sheet-table td.cell-error {
   background: var(--rose) !important;
-  box-shadow: inset 0 0 0 1.5px hsl(calc(var(--theme-h) + 3), 50.9%, 67.3%);
+  box-shadow: inset 0 0 0 1.5px hsl(calc(var(--theme-h) + 3), 50.9%, calc(67.3% * var(--theme-b)));
   border-radius: 4px;
 }
 .sheet-table tr.sheet-empty td { color: var(--ink-faint); font-style: italic; padding: 22px; text-align: center; cursor: default; }
@@ -751,7 +752,7 @@ table.mov .datecell .dow { color: var(--pri); font-weight: 700; margin-left: 6px
 .sheet-input {
   width: 100%; min-width: 68px; max-width: 320px;
   border: none; outline: none; background: var(--paper);
-  box-shadow: 0 0 0 2px var(--pri), 0 4px 14px hsla(var(--theme-h), 59%, 27%, .16);
+  box-shadow: 0 0 0 2px var(--pri), 0 4px 14px hsla(var(--theme-h), 59%, calc(27% * var(--theme-b)), .16);
   border-radius: 7px;
   font: inherit; font-size: 12.5px; color: var(--ink);
   padding: 4px 8px; margin: -6px 0 -6px -4px;
@@ -764,9 +765,9 @@ table.mov .datecell .dow { color: var(--pri); font-weight: 700; margin-left: 6px
 
 .hover-menu {
   position: absolute; z-index: 55; min-width: 148px;
-  background: var(--paper); border: 1px solid var(--line-strong, hsl(calc(var(--theme-h) + 18), 28.2%, 61.8%));
+  background: var(--paper); border: 1px solid var(--line-strong, hsl(calc(var(--theme-h) + 18), 28.2%, calc(61.8% * var(--theme-b))));
   border-radius: 10px; padding: 4px;
-  box-shadow: 0 8px 24px hsla(calc(var(--theme-h) + 12), 33.3%, 16.5%,.16);
+  box-shadow: 0 8px 24px hsla(calc(var(--theme-h) + 12), 33.3%, calc(16.5% * var(--theme-b)),.16);
   animation: menu-in .15s ease;
 }
 .hover-menu button {
@@ -775,9 +776,9 @@ table.mov .datecell .dow { color: var(--pri); font-weight: 700; margin-left: 6px
   font: inherit; font-size: 12px; font-weight: 650; color: var(--ink);
   cursor: pointer; white-space: nowrap;
 }
-.hover-menu button:hover { background: var(--pri-soft, hsl(calc(var(--theme-h) + 83), 15.4%, 89.8%)); }
-.hover-menu button.m-del:hover { background: hsl(calc(var(--theme-h) + 10), 45.8%, 88.4%); color: var(--rose-ink, hsl(calc(var(--theme-h) + 1), 53.7%, 39.8%)); }
-.hover-menu button.armed { background: var(--rose, hsl(calc(var(--theme-h) + 6), 50.8%, 87.3%)); color: var(--rose-ink, hsl(calc(var(--theme-h) + 1), 53.7%, 39.8%)); }
+.hover-menu button:hover { background: var(--pri-soft, hsl(calc(var(--theme-h) + 83), 15.4%, calc(89.8% * var(--theme-b)))); }
+.hover-menu button.m-del:hover { background: hsl(calc(var(--theme-h) + 10), 45.8%, calc(88.4% * var(--theme-b))); color: var(--rose-ink, hsl(calc(var(--theme-h) + 1), 53.7%, calc(39.8% * var(--theme-b)))); }
+.hover-menu button.armed { background: var(--rose, hsl(calc(var(--theme-h) + 6), 50.8%, calc(87.3% * var(--theme-b)))); color: var(--rose-ink, hsl(calc(var(--theme-h) + 1), 53.7%, calc(39.8% * var(--theme-b)))); }
 @keyframes menu-in { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; } }
 
 .g-btn {
@@ -806,7 +807,7 @@ table.mov .datecell .dow { color: var(--pri); font-weight: 700; margin-left: 6px
 .gs-paste button {
   flex: 0 0 auto; appearance: none; border: none; cursor: pointer;
   border-radius: 8px; padding: 6px 12px; font: inherit; font-size: 12px; font-weight: 700;
-  background: var(--pri); color: hsl(calc(var(--theme-h) + 28), 31.3%, 93.7%);
+  background: var(--pri); color: hsl(calc(var(--theme-h) + 28), 31.3%, calc(93.7% * var(--theme-b)));
 }
 .gs-paste button:hover { filter: brightness(1.08); }
 .gs-paste button:disabled { opacity: .55; cursor: default; }
@@ -823,7 +824,7 @@ table.mov .datecell .dow { color: var(--pri); font-weight: 700; margin-left: 6px
 .gs-acts button:hover { background: var(--pri-soft); color: var(--pri); }
 .gs-acts button.subtle { border-color: transparent; color: var(--ink-faint); }
 .gs-acts button.subtle:hover { background: var(--rose); color: var(--rose-ink); }
-.gs-err { font-size: 11px; font-weight: 600; color: var(--rose-ink, hsl(calc(var(--theme-h) + 1), 53.7%, 39.8%)); margin-top: 6px; }
+.gs-err { font-size: 11px; font-weight: 600; color: var(--rose-ink, hsl(calc(var(--theme-h) + 1), 53.7%, calc(39.8% * var(--theme-b)))); margin-top: 6px; }
 .gs-err:not(.err):not(:empty) { color: var(--ink-faint); font-weight: 500; }
 .editdot { color: var(--pri); font-size: 10px; margin-left: 4px; vertical-align: 1px; }
 
@@ -861,7 +862,7 @@ table.mov .datecell .dow { color: var(--pri); font-weight: 700; margin-left: 6px
 .sheet-panel.blank .sheet-blank { display: block; text-align: center; }
 
 .row-skip td.c-colA { color: var(--ink-soft); font-style: italic; }
-.row-skip td.c-skipfill { background: repeating-linear-gradient(-45deg, hsl(calc(var(--theme-h) + 69), 22.5%, 84.3%) 0 6px, transparent 6px 12px); }
+.row-skip td.c-skipfill { background: repeating-linear-gradient(-45deg, hsl(calc(var(--theme-h) + 69), 22.5%, calc(84.3% * var(--theme-b))) 0 6px, transparent 6px 12px); }
 .row-skip .srcbadge.skip { background: var(--line); color: var(--ink-faint); }
 
 /* TL bulk text editor */
@@ -882,7 +883,7 @@ table.mov .datecell .dow { color: var(--pri); font-weight: 700; margin-left: 6px
 .tl-editor:focus { outline: none; border-color: var(--pri); background: var(--paper); }
 .tl-editor-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .tl-editor-status { font-size: 11.5px; color: var(--ink-faint); line-height: 1.45; }
-.cell-error { background: var(--rose) !important; box-shadow: inset 0 0 0 1.5px hsl(calc(var(--theme-h) + 3), 50.9%, 67.3%); border-radius: 4px; }
+.cell-error { background: var(--rose) !important; box-shadow: inset 0 0 0 1.5px hsl(calc(var(--theme-h) + 3), 50.9%, calc(67.3% * var(--theme-b))); border-radius: 4px; }
 
 /* ------------------------------------------------------------ toast */
 .toast {
@@ -896,7 +897,7 @@ table.mov .datecell .dow { color: var(--pri); font-weight: 700; margin-left: 6px
   pointer-events: none; max-width: 420px; line-height: 1.45;
 }
 .toast.show { opacity: 1; transform: translateY(0); }
-.toast.err { background: hsl(calc(var(--theme-h) + 16), 50%, 93.7%); border-left-color: hsl(calc(var(--theme-h) + 3), 50.9%, 67.3%); color: var(--rose-ink); }
+.toast.err { background: hsl(calc(var(--theme-h) + 16), 50%, calc(93.7% * var(--theme-b))); border-left-color: hsl(calc(var(--theme-h) + 3), 50.9%, calc(67.3% * var(--theme-b))); color: var(--rose-ink); }
 
 /* -------------------------------------------------------- responsive */
 @media (max-width: 1140px) {
@@ -926,10 +927,10 @@ body::before {
      backdrop-filter (their backdrop is just these static pools), so the
      pools themselves carry the extra colour */
   background:
-    radial-gradient(560px at 12% 18%, hsla(var(--theme-h), 57%, 35%, .26), transparent 70%),
-    radial-gradient(520px at 88% 12%, hsla(calc(var(--theme-h) + 132), 28.7%, 33.5%,.22), transparent 70%),
-    radial-gradient(680px at 74% 88%, hsla(calc(var(--theme-h) + 30), 82.5%, 26.9%,.21), transparent 70%),
-    radial-gradient(420px at 30% 80%, hsla(calc(var(--theme-h) + 176), 32.9%, 32.7%,.19), transparent 70%);
+    radial-gradient(560px at 12% 18%, hsla(var(--theme-h), 57%, calc(35% * var(--theme-b)), .26), transparent 70%),
+    radial-gradient(520px at 88% 12%, hsla(calc(var(--theme-h) + 132), 28.7%, calc(33.5% * var(--theme-b)),.22), transparent 70%),
+    radial-gradient(680px at 74% 88%, hsla(calc(var(--theme-h) + 30), 82.5%, calc(26.9% * var(--theme-b)),.21), transparent 70%),
+    radial-gradient(420px at 30% 80%, hsla(calc(var(--theme-h) + 176), 32.9%, calc(32.7% * var(--theme-b)),.19), transparent 70%);
 }
 /* cards become glass: the element carries border + float shadow, a dedicated
    ::before layer does the frost (robust in Safari), children stay crisp */
@@ -937,7 +938,7 @@ body::before {
   position: relative; isolation: isolate;
   background: transparent !important;
   border: 1px solid rgba(255, 255, 255, .72);
-  box-shadow: 0 14px 34px hsla(calc(var(--theme-h) + 11), 35.3%, 13.3%,.22);
+  box-shadow: 0 14px 34px hsla(calc(var(--theme-h) + 11), 35.3%, calc(13.3% * var(--theme-b)),.22);
 }
 .group, .surface, .card { border-radius: 20px; }
 .inset { border-radius: 12px; }
@@ -982,7 +983,7 @@ body::before {
     rgba(251, 246, 236, calc(var(--glass-tint) + .06));
   /* perf: blur only while stuck (rows actually slide underneath); app.js
      toggles .stuck in a rAF-throttled scroll handler */
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .7), inset 0 -1px 0 hsla(calc(var(--theme-h) + 12), 24.5%, 38.4%,.08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .7), inset 0 -1px 0 hsla(calc(var(--theme-h) + 12), 24.5%, calc(38.4% * var(--theme-b)),.08);
 }
 .chead.stuck::before {
   -webkit-backdrop-filter: blur(12px) saturate(var(--glass-sat)) brightness(var(--glass-glow));
@@ -993,7 +994,7 @@ body::before {
 /* scrim + movement detail modal */
 .ov-scrim {
   position: fixed; inset: 0; z-index: 90;
-  background: hsla(calc(var(--theme-h) + 11), 35.3%, 13.3%,.30);
+  background: hsla(calc(var(--theme-h) + 11), 35.3%, calc(13.3% * var(--theme-b)),.30);
   -webkit-backdrop-filter: blur(7px); backdrop-filter: blur(7px);
   transition: opacity .32s ease;
 }
@@ -1004,7 +1005,7 @@ body::before {
   width: min(500px, 88vw); border-radius: 22px;
   isolation: isolate; overflow: hidden;
   border: 1px solid rgba(255, 255, 255, .65);
-  box-shadow: 0 26px 64px hsla(calc(var(--theme-h) + 11), 35.3%, 13.3%,.38);
+  box-shadow: 0 26px 64px hsla(calc(var(--theme-h) + 11), 35.3%, calc(13.3% * var(--theme-b)),.38);
   transition: opacity .34s cubic-bezier(.22, .9, .26, 1), transform .34s cubic-bezier(.22, .9, .26, 1);
 }
 .ov-dlg { @starting-style { opacity: 0; transform: translate(-50%, -44%) scale(.94); } }
@@ -1040,7 +1041,7 @@ body::before {
   font: inherit; font-size: 13px; font-weight: 650; padding: 8px 14px; border-radius: 10px; cursor: pointer;
   border: 1px solid rgba(255, 255, 255, .6); background: rgba(255, 255, 255, .45); color: var(--ink);
 }
-.ov-dlg .btn.pri { background: var(--pri); border-color: var(--pri); color: hsl(calc(var(--theme-h) + 28), 31.3%, 93.7%); }
+.ov-dlg .btn.pri { background: var(--pri); border-color: var(--pri); color: hsl(calc(var(--theme-h) + 28), 31.3%, calc(93.7% * var(--theme-b))); }
 /* ------------------------------------- full-width tab slide transitions */
 #panel-schedule, #panel-grid, #icrf-container, #tl-container, #planner-container {
   transition: opacity .48s cubic-bezier(.22, .9, .26, 1), transform .48s cubic-bezier(.22, .9, .26, 1);
@@ -1070,10 +1071,10 @@ body.sliding .topbar::before, body.sliding .chead.stuck::before {
 .set-switch { position: relative; }
 .setbtn {
   width: 38px; height: 38px; border-radius: 12px; flex: 0 0 38px;
-  background: var(--pri); color: hsl(calc(var(--theme-h) + 28), 31.3%, 93.7%);
+  background: var(--pri); color: hsl(calc(var(--theme-h) + 28), 31.3%, calc(93.7% * var(--theme-b)));
   display: grid; place-items: center;
   border: 0; cursor: pointer; font-family: inherit;
-  box-shadow: 0 4px 12px hsla(var(--theme-h), 59%, 27%, .24);
+  box-shadow: 0 4px 12px hsla(var(--theme-h), 59%, calc(27% * var(--theme-b)), .24);
 }
 .setbtn svg { width: 19px; height: 19px; fill: currentColor; }
 .setbtn[aria-expanded="true"] { background: var(--pri-strong); }
@@ -1082,7 +1083,7 @@ body.sliding .topbar::before, body.sliding .chead.stuck::before {
   width: 288px; padding: 14px 16px 10px;
   border-radius: 16px;
   border: 1px solid rgba(255, 255, 255, .72);
-  box-shadow: 0 14px 34px hsla(calc(var(--theme-h) + 11), 35.3%, 13.3%,.26);
+  box-shadow: 0 14px 34px hsla(calc(var(--theme-h) + 11), 35.3%, calc(13.3% * var(--theme-b)),.26);
   isolation: isolate; overflow: hidden;
 }
 .settings-panel::before {
@@ -1107,17 +1108,17 @@ body.sliding .topbar::before, body.sliding .chead.stuck::before {
   appearance: none; -webkit-appearance: none;
   height: 12px; border-radius: 999px;
   background: linear-gradient(90deg, hsl(0, 70%, 45%), hsl(60, 70%, 45%), hsl(120, 70%, 40%), hsl(180, 70%, 40%), hsl(240, 70%, 50%), hsl(300, 70%, 45%), hsl(360, 70%, 45%));
-  border: 1px solid hsla(calc(var(--theme-h) + 12), 33.3%, 16.5%,.18);
+  border: 1px solid hsla(calc(var(--theme-h) + 12), 33.3%, calc(16.5% * var(--theme-b)),.18);
 }
 .sp-row input[type="range"].sp-hue::-webkit-slider-thumb {
   appearance: none; -webkit-appearance: none;
   width: 16px; height: 16px; border-radius: 50%;
-  background: hsl(var(--theme-h), 57%, 35%);
-  border: 2px solid hsl(calc(var(--theme-h) + 28), 31.3%, 93.7%); box-shadow: 0 1px 4px hsla(calc(var(--theme-h) + 11), 35.3%, 13.3%,.35);
+  background: hsl(var(--theme-h), 57%, calc(35% * var(--theme-b)));
+  border: 2px solid hsl(calc(var(--theme-h) + 28), 31.3%, calc(93.7% * var(--theme-b))); box-shadow: 0 1px 4px hsla(calc(var(--theme-h) + 11), 35.3%, calc(13.3% * var(--theme-b)),.35);
 }
 .sp-musicrow {
   grid-template-columns: 108px 1fr;
-  border-top: 1px solid hsla(calc(var(--theme-h) + 12), 24.5%, 38.4%,.18);
+  border-top: 1px solid hsla(calc(var(--theme-h) + 12), 24.5%, calc(38.4% * var(--theme-b)),.18);
   margin-top: 6px; padding-top: 10px;
 }
 .sp-toggle {
@@ -1126,7 +1127,7 @@ body.sliding .topbar::before, body.sliding .chead.stuck::before {
   border: 1px solid var(--line-strong); background: var(--paper); color: var(--ink-soft);
   transition: background .18s ease, color .18s ease, border-color .18s ease;
 }
-.sp-toggle.on { background: var(--pri); border-color: var(--pri); color: hsl(calc(var(--theme-h) + 28), 31.3%, 93.7%); }
+.sp-toggle.on { background: var(--pri); border-color: var(--pri); color: hsl(calc(var(--theme-h) + 28), 31.3%, calc(93.7% * var(--theme-b))); }
 .sp-note { margin: 8px 0 4px; font-size: 10px; color: var(--ink-faint); line-height: 1.4; }
 @media (max-width: 640px) {
   .settings-panel { width: min(288px, calc(100vw - 32px)); }

@@ -1,9 +1,9 @@
 * { box-sizing: border-box; }
-:root { --theme-h: 14; }   /* theme hue — follows the app's Settings slider (login.js applies it) */
+:root { --theme-h: 14; --theme-b: 1; }   /* theme colour/brightness — follows the app's Settings panel (login.js applies it) */
 html, body { margin: 0; height: 100%; }
 body {
   font-family: -apple-system, BlinkMacSystemFont, system-ui, "Segoe UI", Helvetica, Arial, sans-serif;
-  background: hsl(calc(var(--theme-h) + 22), 55.6%, 91.2%); color: hsl(calc(var(--theme-h) + 12), 33.3%, 16.5%); -webkit-font-smoothing: antialiased;
+  background: hsl(calc(var(--theme-h) + 22), 55.6%, calc(91.2% * var(--theme-b))); color: hsl(calc(var(--theme-h) + 12), 33.3%, calc(16.5% * var(--theme-b))); -webkit-font-smoothing: antialiased;
   display: grid; place-items: center; padding: 20px;
   position: relative;
 }
@@ -11,23 +11,23 @@ body {
 body::before {
   content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
   background:
-    radial-gradient(560px at 12% 18%, hsla(var(--theme-h), 57%, 35%, .22), transparent 70%),
-    radial-gradient(520px at 88% 12%, hsla(calc(var(--theme-h) + 132), 28.7%, 33.5%,.18), transparent 70%),
-    radial-gradient(680px at 74% 88%, hsla(calc(var(--theme-h) + 30), 82.5%, 26.9%,.17), transparent 70%),
-    radial-gradient(420px at 30% 80%, hsla(calc(var(--theme-h) + 176), 32.9%, 32.7%,.16), transparent 70%);
+    radial-gradient(560px at 12% 18%, hsla(var(--theme-h), 57%, calc(35% * var(--theme-b)), .22), transparent 70%),
+    radial-gradient(520px at 88% 12%, hsla(calc(var(--theme-h) + 132), 28.7%, calc(33.5% * var(--theme-b)),.18), transparent 70%),
+    radial-gradient(680px at 74% 88%, hsla(calc(var(--theme-h) + 30), 82.5%, calc(26.9% * var(--theme-b)),.17), transparent 70%),
+    radial-gradient(420px at 30% 80%, hsla(calc(var(--theme-h) + 176), 32.9%, calc(32.7% * var(--theme-b)),.16), transparent 70%);
 }
 .login {
   position: relative; isolation: isolate;
   width: 100%; max-width: 380px;
   border: 1px solid rgba(255, 255, 255, .72);
   border-radius: 22px; padding: 34px 30px 30px; text-align: center;
-  box-shadow: 0 14px 34px hsla(calc(var(--theme-h) + 11), 35.3%, 13.3%,.22);
+  box-shadow: 0 14px 34px hsla(calc(var(--theme-h) + 11), 35.3%, calc(13.3% * var(--theme-b)),.22);
 }
 .login::before {
   content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit;
   background:
     linear-gradient(118deg, rgba(255, 255, 255, .32), rgba(255, 255, 255, .06) 38%, rgba(255, 255, 255, .20) 58%, rgba(255, 255, 255, .15)),
-    hsla(calc(var(--theme-h) + 26), 65.2%, 95.5%,.24);
+    hsla(calc(var(--theme-h) + 26), 65.2%, calc(95.5% * var(--theme-b)),.24);
   /* perf: no backdrop-filter — the backdrop is a static gradient, blur is a no-op */
   box-shadow: inset 0 0 24px rgba(255, 255, 255, .12),
     inset 1.5px 1.5px 1px -.5px rgba(255, 255, 255, .85),
@@ -36,32 +36,32 @@ body::before {
 }
 .mark {
   width: 52px; height: 52px; border-radius: 16px; margin: 0 auto 16px;
-  background: hsl(var(--theme-h), 57%, 35%); color: hsl(calc(var(--theme-h) + 28), 31.3%, 93.7%); font-weight: 800; font-size: 17px;
+  background: hsl(var(--theme-h), 57%, calc(35% * var(--theme-b))); color: hsl(calc(var(--theme-h) + 28), 31.3%, calc(93.7% * var(--theme-b))); font-weight: 800; font-size: 17px;
   display: grid; place-items: center;
-  box-shadow: 0 6px 16px hsla(var(--theme-h), 59%, 27%, .30);
+  box-shadow: 0 6px 16px hsla(var(--theme-h), 59%, calc(27% * var(--theme-b)), .30);
 }
 h1 { font-size: 20px; margin: 0 0 6px; letter-spacing: -0.02em; }
-.sub { margin: 0 0 22px; color: hsl(calc(var(--theme-h) + 13), 21.8%, 34.1%); font-size: 14px; }
+.sub { margin: 0 0 22px; color: hsl(calc(var(--theme-h) + 13), 21.8%, calc(34.1% * var(--theme-b))); font-size: 14px; }
 form { text-align: left; }
-label { display: block; font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: hsl(calc(var(--theme-h) + 15), 18.8%, 55.1%); margin-bottom: 7px; }
+label { display: block; font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: hsl(calc(var(--theme-h) + 15), 18.8%, calc(55.1% * var(--theme-b))); margin-bottom: 7px; }
 input[type=password] {
   width: 100%; font: inherit; font-size: 15px; padding: 11px 14px; color: inherit;
-  border: 1px solid hsl(calc(var(--theme-h) + 18), 28.2%, 61.8%); border-radius: 11px; outline: none; background: hsl(calc(var(--theme-h) + 26), 65.2%, 95.5%);
+  border: 1px solid hsl(calc(var(--theme-h) + 18), 28.2%, calc(61.8% * var(--theme-b))); border-radius: 11px; outline: none; background: hsl(calc(var(--theme-h) + 26), 65.2%, calc(95.5% * var(--theme-b)));
 }
-input[type=password]:focus { border-color: hsl(var(--theme-h), 57%, 35%); box-shadow: 0 0 0 3px hsla(var(--theme-h), 57%, 35%, .22); background: hsl(calc(var(--theme-h) + 26), 65.2%, 95.5%); }
-.msg { min-height: 20px; margin: 10px 0 4px; font-size: 13px; color: hsl(calc(var(--theme-h) + 0), 77.2%, 31%); }
+input[type=password]:focus { border-color: hsl(var(--theme-h), 57%, calc(35% * var(--theme-b))); box-shadow: 0 0 0 3px hsla(var(--theme-h), 57%, calc(35% * var(--theme-b)), .22); background: hsl(calc(var(--theme-h) + 26), 65.2%, calc(95.5% * var(--theme-b))); }
+.msg { min-height: 20px; margin: 10px 0 4px; font-size: 13px; color: hsl(calc(var(--theme-h) + 0), 77.2%, calc(31% * var(--theme-b))); }
 button {
   width: 100%; font: inherit; font-weight: 650; font-size: 14px; padding: 11px; cursor: pointer;
-  border: none; border-radius: 11px; background: hsl(var(--theme-h), 57%, 35%); color: hsl(calc(var(--theme-h) + 28), 31.3%, 93.7%); transition: background .15s;
+  border: none; border-radius: 11px; background: hsl(var(--theme-h), 57%, calc(35% * var(--theme-b))); color: hsl(calc(var(--theme-h) + 28), 31.3%, calc(93.7% * var(--theme-b))); transition: background .15s;
 }
-button:hover:not(:disabled) { background: hsl(var(--theme-h), 59%, 27%); }
+button:hover:not(:disabled) { background: hsl(var(--theme-h), 59%, calc(27% * var(--theme-b))); }
 button:disabled { opacity: .6; cursor: wait; }
-button:focus-visible { outline: 2px solid hsl(var(--theme-h), 57%, 35%); outline-offset: 2px; }
+button:focus-visible { outline: 2px solid hsl(var(--theme-h), 57%, calc(35% * var(--theme-b))); outline-offset: 2px; }
 .tunnel { margin: 22px 0 0; text-align: left; }
-.t-label { font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: hsl(calc(var(--theme-h) + 15), 18.8%, 55.1%); margin-bottom: 7px; }
+.t-label { font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: hsl(calc(var(--theme-h) + 15), 18.8%, calc(55.1% * var(--theme-b))); margin-bottom: 7px; }
 .t-url {
   display: block; width: 100%; text-align: left; font: inherit; font-size: 13px; font-weight: 650;
-  color: hsl(calc(var(--theme-h) + 176), 32.9%, 32.7%); background: hsl(calc(var(--theme-h) + 175), 22.8%, 88.8%); border: 1px dashed hsl(calc(var(--theme-h) + -173), 21.7%, 68.4%); border-radius: 10px;
+  color: hsl(calc(var(--theme-h) + 176), 32.9%, calc(32.7% * var(--theme-b))); background: hsl(calc(var(--theme-h) + 175), 22.8%, calc(88.8% * var(--theme-b))); border: 1px dashed hsl(calc(var(--theme-h) + -173), 21.7%, calc(68.4% * var(--theme-b))); border-radius: 10px;
   padding: 9px 12px; word-break: break-all; line-height: 1.35; cursor: pointer;
 }
-.t-url:hover { background: hsl(calc(var(--theme-h) + 175), 26.3%, 85.1%); }
+.t-url:hover { background: hsl(calc(var(--theme-h) + 175), 26.3%, calc(85.1% * var(--theme-b))); }

@@ -71,7 +71,7 @@
     if (off > 180) off -= 360;
     if (off <= -180) off += 360;
     return 'hsl' + (a !== undefined ? 'a' : '') + '(calc(var(--theme-h) + ' + off + '),' +
-      (Math.round(s * 1000) / 10) + '%,' + (Math.round(l * 1000) / 10) + '%' +
+      (Math.round(s * 1000) / 10) + '%,calc(' + (Math.round(l * 1000) / 10) + '% * var(--theme-b))' +
       (a !== undefined ? ',' + a : '') + ')';
   }
   function coyStyle(c) {
@@ -2696,7 +2696,7 @@
 
   /* -------------------------------------------------------- settings -- */
   /* glass look + audio preferences, stored app-wide (not per school) */
-  var PREF_DEFAULTS = { tint: 22, sat: 215, glow: 105, vol: 40, music: false, hue: 14 };
+  var PREF_DEFAULTS = { tint: 22, sat: 215, bri: 100, vol: 40, music: false, hue: 14 };
   var prefs = null, musicAudio = null, musicWaiting = false;
 
   function loadPrefs() {
@@ -2717,9 +2717,9 @@
   function applyGlassPrefs() {
     var r = document.documentElement.style;
     r.setProperty('--theme-h', String(prefs.hue));
+    r.setProperty('--theme-b', (prefs.bri / 100).toFixed(3));
     r.setProperty('--glass-tint', (prefs.tint / 100).toFixed(3));
     r.setProperty('--glass-sat', prefs.sat + '%');
-    r.setProperty('--glass-glow', prefs.glow + '%');
   }
   function musicVol() { return Math.max(0, Math.min(1, tapVol * 0.6)); }
   function musicStart() {
@@ -2765,7 +2765,7 @@
     set('set-hue', prefs.hue, prefs.hue + '°');
     set('set-tint', prefs.tint, prefs.tint + '%');
     set('set-refract', prefs.sat, prefs.sat + '%');
-    set('set-bright', prefs.glow, prefs.glow + '%');
+    set('set-bright', prefs.bri, prefs.bri + '%');
     set('set-vol', prefs.vol, prefs.vol + '%');
     musicSyncBtn();
   }
@@ -2802,7 +2802,7 @@
     bindRange('set-hue', 'hue', applyGlassPrefs, '°');
     bindRange('set-tint', 'tint', applyGlassPrefs);
     bindRange('set-refract', 'sat', applyGlassPrefs);
-    bindRange('set-bright', 'glow', applyGlassPrefs);
+    bindRange('set-bright', 'bri', applyGlassPrefs);
     bindRange('set-vol', 'vol', function () {
       tapVol = prefs.vol / 100;
       if (musicAudio) musicAudio.volume = musicVol();

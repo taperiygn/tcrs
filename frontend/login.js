@@ -7,6 +7,7 @@
     var p = JSON.parse(localStorage.getItem('tcrs:prefs') || '{}');
     if (p.vol !== undefined) tapVol = Math.max(0, Math.min(1, p.vol / 100));
     if (p.hue !== undefined) document.documentElement.style.setProperty('--theme-h', String(p.hue));
+    if (p.bri !== undefined) document.documentElement.style.setProperty('--theme-b', String(p.bri / 100));
   } catch (e) { }
   var tapCtx = null, tapBuf = null, tapLoading = false;
   function tapPlayBuf() {
