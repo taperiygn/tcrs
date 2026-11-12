@@ -411,9 +411,9 @@ body.rail-collapsed .workspace { min-width: 0; }
   border: 1px solid var(--line); border-radius: 6px;
   background: var(--paper); color: var(--ink-faint);
   font-size: 11px; line-height: 1; cursor: pointer;
-  opacity: 0; transition: opacity .15s ease, color .15s ease, border-color .15s ease;
+  transition: color .15s ease, border-color .15s ease;
 }
-.acc-body .hrow:hover .hrev, .acc-body .hrow .hrev.armed { opacity: 1; }
+.acc-body .hrow .hrev.armed { opacity: 1; }
 .acc-body .hrow .hrev:hover { color: var(--pri); border-color: var(--pri-deep); }
 .acc-body .hrow .hrev.armed { background: var(--rose); border-color: transparent; color: var(--rose-ink); }
 
@@ -958,7 +958,6 @@ table.mov .datecell .dow { color: var(--pri); font-weight: 700; margin-left: 6px
 /* touch devices: hover-only affordances must be always visible */
 @media (hover: none) {
   .sheet-table .g-btn { opacity: 1; }
-  .acc-body .hrow .hrev { opacity: 1; }
 }
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
