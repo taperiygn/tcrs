@@ -2175,6 +2175,7 @@
           '<p class="hintline">Try enabling more companies, or turning “Keep only School ' + state.school + ' movements” off.</p></div>';
       }
     }
+    if (stickySync) stickySync();   // re-rendered headers need their stuck state re-judged
   }
 
   var MON_SHORTS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
@@ -2453,7 +2454,11 @@
       lsSet('tcrs:rail', collapsed ? 'collapsed' : 'open');
     });
 
-    $('grid-search').addEventListener('input', function (e) { applySearch(); });
+    var searchT = null;
+    $('grid-search').addEventListener('input', function (e) {
+      clearTimeout(searchT);
+      searchT = setTimeout(applySearch, 140);   // debounce: full tbody rebuild per keystroke is the laggy path
+    });
     var discardArm = null;
     $('grid-discard').addEventListener('click', function () {
       if (!state.model) return;
@@ -2506,6 +2511,7 @@
     });
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeOverlays(); });
 
+    var slideT = null;
     /* direction-aware slide on tab + sub-tab switches — capture phase so the
        class lands before app's own handlers flip the panel display */
     document.addEventListener('click', function (ev) {
@@ -2524,6 +2530,10 @@
       }
       document.body.classList.remove('slide-l', 'slide-r', 'slide-l2', 'slide-r2');
       document.body.classList.add(cls);
+      /* pause backdrop-filters for the slide's duration (see body.sliding CSS) */
+      document.body.classList.add('sliding');
+      clearTimeout(slideT);
+      slideT = setTimeout(function () { document.body.classList.remove('sliding'); }, 560);
     }, true);
 
     /* floating stats dock */
@@ -2535,6 +2545,34 @@
       document.body.appendChild(d);
       updateDock();
     }
+  }
+
+  /* ------------------------------------------------ sticky head sync -- */
+  /* .chead panes blur only while actually stuck (rows slide underneath);
+     everywhere else the blur is a visual no-op on the static pools. */
+  var stickySync = null;
+  function initStickyHeads() {
+    var topbarH = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--topbar-h')) || 64;
+    function update() {
+      stickySync = update;          // cheap: also safe to call straight after a re-render
+      var heads = document.querySelectorAll('.chead');
+      for (var i = 0; i < heads.length; i++) {
+        var r = heads[i].getBoundingClientRect();
+        heads[i].classList.toggle('stuck', r.top <= topbarH + 1 && r.bottom > topbarH);
+      }
+    }
+    var ticking = false;
+    function onScroll() {
+      if (ticking) return;
+      ticking = true;
+      (window.requestAnimationFrame || function (f) { setTimeout(f, 16); })(function () {
+        ticking = false;
+        update();
+      });
+    }
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll, { passive: true });
+    update();
   }
 
   function openMovementModal(e) {
@@ -2756,6 +2794,7 @@
   initOverlays();
   initTapSound();
   initSettings();
+  initStickyHeads();
   applySchoolTexts();
   setTab(state.tab);   // sync visibility with the (possibly hash-set) tab
   syncControls();

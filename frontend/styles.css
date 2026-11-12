@@ -875,11 +875,14 @@ table.mov .datecell .dow { color: var(--pri); font-weight: 700; margin-left: 6px
 /* ambient colour pools behind the glass — rust / forest / gold / teal */
 body::before {
   content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  /* alphas include the old saturate() boost: card panes no longer run a
+     backdrop-filter (their backdrop is just these static pools), so the
+     pools themselves carry the extra colour */
   background:
-    radial-gradient(560px at 12% 18%, rgba(140, 61, 38, .22), transparent 70%),
-    radial-gradient(520px at 88% 12%, rgba(61, 110, 82, .18), transparent 70%),
-    radial-gradient(680px at 74% 88%, rgba(125, 94, 12, .17), transparent 70%),
-    radial-gradient(420px at 30% 80%, rgba(56, 102, 111, .16), transparent 70%);
+    radial-gradient(560px at 12% 18%, rgba(140, 61, 38, .26), transparent 70%),
+    radial-gradient(520px at 88% 12%, rgba(61, 110, 82, .22), transparent 70%),
+    radial-gradient(680px at 74% 88%, rgba(125, 94, 12, .21), transparent 70%),
+    radial-gradient(420px at 30% 80%, rgba(56, 102, 111, .19), transparent 70%);
 }
 /* cards become glass: the element carries border + float shadow, a dedicated
    ::before layer does the frost (robust in Safari), children stay crisp */
@@ -891,9 +894,25 @@ body::before {
 }
 .group, .surface, .card { border-radius: 20px; }
 .inset { border-radius: 12px; }
-.group::before, .surface::before, .card::before, .inset::before, .topbar::before, .sheet-panel::before {
+/* card panes: the element carries border + float shadow, a dedicated ::before
+   layer does the frost (robust in Safari), children stay crisp.
+   Perf: no backdrop-filter here — the backdrop behind a card is only the
+   static body pools, so blur/saturate is a visual no-op that costs a full
+   filter pass per pane per frame. The pools above carry the saturation. */
+.group::before, .surface::before, .card::before, .inset::before, .sheet-panel::before {
   content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit;
   /* tint/brightness come from the Settings panel; sheen = light bending across the pane */
+  background:
+    linear-gradient(118deg, rgba(255, 255, 255, .34), rgba(255, 255, 255, .07) 38%, rgba(255, 255, 255, .20) 58%, rgba(255, 255, 255, .05) 82%, rgba(255, 255, 255, .16)),
+    rgba(251, 246, 236, var(--glass-tint));
+  box-shadow: inset 0 0 24px rgba(255, 255, 255, .12),
+    inset 1.5px 1.5px 1px -.5px rgba(255, 255, 255, .85),
+    inset -1.5px -1.5px 1px -.5px rgba(255, 255, 255, .50),
+    inset 0 0 0 1px rgba(255, 255, 255, .10);
+}
+/* the topbar DOES have content passing under it (sticky, z-50) — keep the blur */
+.topbar::before {
+  content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit;
   background:
     linear-gradient(118deg, rgba(255, 255, 255, .34), rgba(255, 255, 255, .07) 38%, rgba(255, 255, 255, .20) 58%, rgba(255, 255, 255, .05) 82%, rgba(255, 255, 255, .16)),
     rgba(251, 246, 236, var(--glass-tint));
@@ -914,9 +933,13 @@ body::before {
   background:
     linear-gradient(118deg, rgba(255, 255, 255, .22), rgba(255, 255, 255, .05) 45%, rgba(255, 255, 255, .14) 62%, rgba(255, 255, 255, .12)),
     rgba(251, 246, 236, calc(var(--glass-tint) + .06));
-  -webkit-backdrop-filter: blur(14px) saturate(var(--glass-sat)) brightness(var(--glass-glow));
-  backdrop-filter: blur(14px) saturate(var(--glass-sat)) brightness(var(--glass-glow));
+  /* perf: blur only while stuck (rows actually slide underneath); app.js
+     toggles .stuck in a rAF-throttled scroll handler */
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .7), inset 0 -1px 0 rgba(122, 95, 74, .08);
+}
+.chead.stuck::before {
+  -webkit-backdrop-filter: blur(12px) saturate(var(--glass-sat)) brightness(var(--glass-glow));
+  backdrop-filter: blur(12px) saturate(var(--glass-sat)) brightness(var(--glass-glow));
 }
 
 /* --------------------------------------------- glass overlays */
@@ -943,8 +966,8 @@ body::before {
   background:
     linear-gradient(118deg, rgba(255, 255, 255, .30), rgba(255, 255, 255, .06) 40%, rgba(255, 255, 255, .18) 60%, rgba(255, 255, 255, .14)),
     rgba(251, 246, 236, calc(var(--glass-tint) + .08));
-  -webkit-backdrop-filter: blur(22px) saturate(var(--glass-sat)) brightness(var(--glass-glow));
-  backdrop-filter: blur(22px) saturate(var(--glass-sat)) brightness(var(--glass-glow));
+  -webkit-backdrop-filter: blur(18px) saturate(var(--glass-sat)) brightness(var(--glass-glow));
+  backdrop-filter: blur(18px) saturate(var(--glass-sat)) brightness(var(--glass-glow));
   box-shadow: inset 0 0 24px rgba(255, 255, 255, .14),
     inset 1.5px 1.5px 1px -.5px rgba(255, 255, 255, .85),
     inset -1.5px -1.5px 1px -.5px rgba(255, 255, 255, .50);
@@ -985,8 +1008,8 @@ body::before {
   background:
     linear-gradient(118deg, rgba(255, 255, 255, .28), rgba(255, 255, 255, .05) 40%, rgba(255, 255, 255, .16) 60%, rgba(255, 255, 255, .12)),
     rgba(251, 246, 236, calc(var(--glass-tint) + .04));
-  -webkit-backdrop-filter: blur(16px) saturate(var(--glass-sat)) brightness(var(--glass-glow));
-  backdrop-filter: blur(16px) saturate(var(--glass-sat)) brightness(var(--glass-glow));
+  -webkit-backdrop-filter: blur(14px) saturate(var(--glass-sat)) brightness(var(--glass-glow));
+  backdrop-filter: blur(14px) saturate(var(--glass-sat)) brightness(var(--glass-glow));
   box-shadow: inset 1.5px 1.5px 1px -.5px rgba(255, 255, 255, .85), inset -1.5px -1.5px 1px -.5px rgba(255, 255, 255, .50);
 }
 .ov-dock .in { padding: 12px 16px; font-size: 12px; font-weight: 650; color: var(--ink); }
@@ -1010,6 +1033,14 @@ body.slide-r2 #planner-container { @starting-style { opacity: 0; transform: tran
 /* springy press on topbar buttons */
 .topbar button { transition: transform .18s cubic-bezier(.22, .9, .26, 1), background .18s ease, box-shadow .18s ease; }
 .topbar button:active { transform: scale(.94); }
+
+/* perf: during the full-width tab slide, panels translate behind every frosted
+   pane — each backdrop-filter would re-render all 0.48s. body.sliding (set by
+   app.js for the duration) pauses them; the slide itself hides the swap. */
+body.sliding .topbar::before, body.sliding .chead.stuck::before, body.sliding .ov-dock::before {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
 
 /* ------------------------------------------------------- settings */
 .set-switch { position: relative; }
@@ -1035,8 +1066,8 @@ body.slide-r2 #planner-container { @starting-style { opacity: 0; transform: tran
   background:
     linear-gradient(118deg, rgba(255, 255, 255, .26), rgba(255, 255, 255, .06) 40%, rgba(255, 255, 255, .16) 60%, rgba(255, 255, 255, .10)),
     rgba(251, 246, 236, calc(var(--glass-tint) + .30));
-  -webkit-backdrop-filter: blur(20px) saturate(var(--glass-sat)) brightness(var(--glass-glow));
-  backdrop-filter: blur(20px) saturate(var(--glass-sat)) brightness(var(--glass-glow));
+  -webkit-backdrop-filter: blur(16px) saturate(var(--glass-sat)) brightness(var(--glass-glow));
+  backdrop-filter: blur(16px) saturate(var(--glass-sat)) brightness(var(--glass-glow));
   box-shadow: inset 1.5px 1.5px 1px -.5px rgba(255, 255, 255, .8), inset -1.5px -1.5px 1px -.5px rgba(255, 255, 255, .45);
 }
 .settings-panel[hidden] { display: none; }
