@@ -50,6 +50,30 @@
     '7TH': COY_FILL_CYCLE[6],
     'SCHWIDE': ['#57655A', '#E4E7DC']
   };
+  /* every palette colour rides the theme hue: a fixed brand hex becomes
+     hsl(calc(var(--theme-h) + OFF), S%, L%) — OFF is the colour's original
+     distance from the rust default (hue 14), so moving the Settings slider
+     rotates the whole wheel rigidly and all colour relations hold */
+  function themeCol(hex, a) {
+    var r = parseInt(hex.slice(1, 3), 16) / 255,
+      g = parseInt(hex.slice(3, 5), 16) / 255,
+      b = parseInt(hex.slice(5, 7), 16) / 255;
+    var max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min, h = 0;
+    if (d) {
+      if (max === r) h = ((g - b) / d) % 6;
+      else if (max === g) h = (b - r) / d + 2;
+      else h = (r - g) / d + 4;
+      h *= 60; if (h < 0) h += 360;
+    }
+    var l = (max + min) / 2;
+    var s = d ? d / (1 - Math.abs(2 * l - 1)) : 0;
+    var off = Math.round(h - 14);
+    if (off > 180) off -= 360;
+    if (off <= -180) off += 360;
+    return 'hsl' + (a !== undefined ? 'a' : '') + '(calc(var(--theme-h) + ' + off + '),' +
+      (Math.round(s * 1000) / 10) + '%,' + (Math.round(l * 1000) / 10) + '%' +
+      (a !== undefined ? ',' + a : '') + ')';
+  }
   function coyStyle(c) {
     var p = COY_COLORS[c];
     if (!p) {
@@ -57,7 +81,7 @@
       var i = roster.indexOf(c);
       p = i > -1 ? COY_FILL_CYCLE[i % COY_FILL_CYCLE.length] : COY_FILL_CYCLE[0];
     }
-    return { cc: p[0], cb: p[1] };
+    return { cc: themeCol(p[0]), cb: themeCol(p[1]), cbA: themeCol(p[1], .65) };
   }
 
   var $ = function (id) { return document.getElementById(id); };
@@ -2022,7 +2046,7 @@
   function rowWash(coys, coy) {
     var c = coy || (coys && coys.length === 1 ? coys[0] : null);
     if (!c) return '';
-    return ' style="background:' + coyStyle(c).cb + 'A6"';
+    return ' style="background:' + coyStyle(c).cbA + '"';
   }
 
   /* tiny stroke icon set (inline SVG, currentColor) — replaces the old
