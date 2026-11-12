@@ -360,6 +360,43 @@
     failures++;
     out.push('CRASH(C) ' + (e && e.stack || e));
   }
+
+  /* ---------- part D: columnar TL survives the live-sheet text round-trip */
+  try {
+    function buildColTl() {
+      var wb = new ExcelJS.Workbook();
+      var ws = wb.addWorksheet('DEC 26 TL');
+      ws.getRow(1).getCell(11).value = 'DECEMBER-2026';
+      ws.getRow(3).values = [, 'DATE', 'DAY', 'DAY OF WEEK', 'TIME', 'TIME GAP (H:MM)', 'COY/UNIT', 'PURPOSE', 'PICK-UP POINT TO DROP-OFF POINT', 'NO. OF BUSES', 'REMARKS'];
+      ws.getRow(4).values = [, { formula: 'B4&"-"&$K$1', result: NaN }, 1, 'Tuesday', '0630', , '1ST', 'COMD VETT', 'RHC - MTL', 4, '4x 5-TON'];
+      ws.getRow(5).values = [, { formula: 'B5&"-"&$K$1', result: NaN }, 2, 'Wednesday', '1700', , '5TH', 'GX II', 'MTL - RHC', 2, ''];
+      return wb;
+    }
+    async function toFileD(wb, name) { return new File([await wb.xlsx.writeBuffer()], name); }
+    await A.handleFile(await toFileD(buildColTl(), 'DEC 26 TL.xlsx'), 'tl');
+    var tlt = A.state.entries.filter(function (e) { return e.source === 'TROOPLIFT'; });
+    ok('columnar TL loaded into the app with dates', tlt.length === 3 &&
+      tlt[0].date === '2026-12-01' && tlt[2].date === '2026-12-02',
+      JSON.stringify(tlt.map(function (e) { return [e.date, e.timeStart]; })));
+    var dated = A.state.tlLines.filter(function (l) { return l.kind === 'date'; }).length;
+    ok('TL lines carry date headings (2 days)', dated === 2, dated);
+
+    /* the exact user bug: live-sheet text → Update must keep every date */
+    var txt = A.tlText();
+    var before = {};
+    tlt.forEach(function (e) { before[e.id] = e.date; });
+    var resT = A.applyTLText(txt);
+    var after = A.state.entries.filter(function (e) { return e.source === 'TROOPLIFT'; });
+    ok('text round-trip keeps every trip date', after.length === 3 &&
+      after.every(function (e) { return e.date && (before[e.id] ? before[e.id] === e.date : true); }) &&
+      after[0].date === '2026-12-01' && after[after.length - 1].date === '2026-12-02',
+      JSON.stringify(resT) + ' ' + JSON.stringify(after.map(function (e) { return [e.date, e.timeStart, e.vehicleType]; })));
+    ok('tonner row survives the round-trip',
+      after.some(function (e) { return e.vehicleType === 'TONNERS' && e.qty === 4 && e.timeStart === '0630'; }));
+  } catch (e) {
+    failures++;
+    out.push('CRASH(D) ' + (e && e.stack || e));
+  }
   log();
   document.title = failures ? 'PLAN FAILED' : 'PLAN OK';
 })();

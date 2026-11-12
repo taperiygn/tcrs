@@ -396,7 +396,9 @@
         var c = head.map[key];
         return c ? cellValue(row.getCell(c)) : null;
       };
-      /* date transition — with the DAY-column fallback */
+      /* date transition — with the DAY-column fallback. Emit a date
+         heading line whenever the date changes, so the TL text block
+         round-trips (Update) without losing dates. */
       var dv = tlDateCellToYMD(gv('date'));
       if (!dv) {
         var dcell = gv('day'), dayNum = null;
@@ -406,10 +408,12 @@
           dv = colYear + '-' + pad(colMonth) + '-' + pad(dayNum);
         }
       }
-      if (dv) {
+      if (dv && dv !== curDate) {
         curDate = dv;
         res.days[curDate] = 1;
         res.tlDateMonths.push(+dv.slice(5, 7));
+        var pd = dv.split('-');
+        res.lines.push({ row: r, kind: 'date', date: curDate, text: (+pd[2]) + '/' + (+pd[1]) });
       }
 
       var timeRaw = gv('time');
@@ -470,7 +474,7 @@
         applyTLFields(e, f2);
         fields.coys.forEach(function (c) { res.coySet[c] = 1; });
         res.entries.push(e);
-        res.lines.push({ row: r, kind: 'line', text: rawText, status: 'ok', date: curDate, entryId: e.id });
+        res.lines.push({ row: r, kind: 'line', id: e.id, text: rawText, status: 'ok', date: curDate, entryId: e.id });
       }
       var text = tlComposeText({ timeStart: time, from: fields.from, to: fields.to,
         qty: fields.qty, vehicleType: 'BUSES',
