@@ -2655,6 +2655,7 @@
      then a buffer source plays per click — reliable in every browser.
      Any failure is warned to the console instead of being swallowed. */
   var tapCtx = null, tapBuf = null, tapLoading = false, tapVol = 0.4;
+  var typeBuf = null, typeLoading = false, typeLast = 0;
   function tapPlayBuf() {
     try {
       var src = tapCtx.createBufferSource();
@@ -2664,6 +2665,16 @@
       src.connect(g); g.connect(tapCtx.destination);
       src.start();
     } catch (e) { console.warn('tap sound failed:', e && e.message); }
+  }
+  function typePlayBuf() {
+    try {
+      var src = tapCtx.createBufferSource();
+      src.buffer = typeBuf;
+      var g = tapCtx.createGain();
+      g.gain.value = tapVol;
+      src.connect(g); g.connect(tapCtx.destination);
+      src.start();
+    } catch (e) { console.warn('type sound failed:', e && e.message); }
   }
   function tapPrepare() {
     try {
@@ -2683,15 +2694,47 @@
           })
           .catch(function (e) { tapLoading = false; console.warn('tap sound load failed:', e && e.message); });
       }
+      if (!typeBuf && !typeLoading) {
+        typeLoading = true;
+        fetch('type.mp3')
+          .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.arrayBuffer(); })
+          .then(function (ab) {
+            tapCtx.decodeAudioData(ab, function (buf) { typeBuf = buf; },
+              function (e) { typeLoading = false; console.warn('type sound decode failed:', e && e.message); });
+          })
+          .catch(function (e) { typeLoading = false; console.warn('type sound load failed:', e && e.message); });
+      }
     } catch (e) { console.warn('tap sound init failed:', e && e.message); }
   }
   function playTap() {
     tapPrepare();                 // also runs on the very first click
     if (tapCtx && tapBuf) tapPlayBuf();
   }
+  /* typing sound: type.mp3 per real keystroke in a textbox. Throttled so
+     held-down keys / autorepeat don't stack into a buzz (min 60 ms gap). */
+  function isTypeTarget(t) {
+    if (!t || !t.tagName) return false;
+    if (t.tagName === 'TEXTAREA' || t.isContentEditable) return true;
+    if (t.tagName === 'INPUT') {
+      var ty = (t.getAttribute('type') || 'text').toLowerCase();
+      return ty === 'text' || ty === 'search' || ty === 'password' ||
+        ty === 'number' || ty === 'email' || ty === 'url';
+    }
+    return false;
+  }
+  function playType() {
+    var now = Date.now();
+    if (now - typeLast < 60) return;
+    typeLast = now;
+    tapPrepare();
+    if (tapCtx && typeBuf) typePlayBuf();
+  }
   function initTapSound() {
     document.addEventListener('pointerdown', tapPrepare, true);
     document.addEventListener('click', playTap, true);
+    document.addEventListener('input', function (e) {
+      if (isTypeTarget(e.target)) playType();
+    }, true);
   }
 
   /* -------------------------------------------------------- settings -- */

@@ -1,7 +1,8 @@
 (function () {
-  /* tap sound on every click (same tick as the builder app) — Web Audio,
-     decoded once at first pointerdown, a buffer source per click.
-     Volume follows the app's Settings panel (tcrs:prefs). */
+  /* tap sound on every click + type.mp3 on textbox typing (same tick as
+     the builder app) — Web Audio, decoded once at first pointerdown, a
+     buffer source per event. Volume follows the app's Settings panel
+     (tcrs:prefs). */
   var tapVol = 0.4;
   try {
     var p = JSON.parse(localStorage.getItem('tcrs:prefs') || '{}');
@@ -10,15 +11,25 @@
     if (p.bri !== undefined) document.documentElement.style.setProperty('--theme-b', String(p.bri / 100));
   } catch (e) { }
   var tapCtx = null, tapBuf = null, tapLoading = false;
-  function tapPlayBuf() {
+  var typeBuf = null, typeLoading = false, typeLast = 0;
+  function bufPlay(buf) {
     try {
       var src = tapCtx.createBufferSource();
-      src.buffer = tapBuf;
+      src.buffer = buf;
       var g = tapCtx.createGain();
       g.gain.value = tapVol;
       src.connect(g); g.connect(tapCtx.destination);
       src.start();
-    } catch (e) { console.warn('tap sound failed:', e && e.message); }
+    } catch (e) { console.warn('sound failed:', e && e.message); }
+  }
+  function decodeFile(file, ok, fail) {
+    fetch(file)
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.arrayBuffer(); })
+      .then(function (ab) {
+        tapCtx.decodeAudioData(ab, ok,
+          function (e) { fail(); console.warn(file + ' decode failed:', e && e.message); });
+      })
+      .catch(function (e) { fail(); console.warn(file + ' load failed:', e && e.message); });
   }
   function tapPrepare() {
     try {
@@ -30,22 +41,33 @@
       if (tapCtx.state === 'suspended') tapCtx.resume().catch(function () { });
       if (!tapBuf && !tapLoading) {
         tapLoading = true;
-        fetch('tap.mp3')
-          .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.arrayBuffer(); })
-          .then(function (ab) {
-            tapCtx.decodeAudioData(ab, function (buf) { tapBuf = buf; },
-              function (e) { tapLoading = false; console.warn('tap sound decode failed:', e && e.message); });
-          })
-          .catch(function (e) { tapLoading = false; console.warn('tap sound load failed:', e && e.message); });
+        decodeFile('tap.mp3', function (buf) { tapBuf = buf; }, function () { tapLoading = false; });
+      }
+      if (!typeBuf && !typeLoading) {
+        typeLoading = true;
+        decodeFile('type.mp3', function (buf) { typeBuf = buf; }, function () { typeLoading = false; });
       }
     } catch (e) { console.warn('tap sound init failed:', e && e.message); }
   }
   function playTap() {
     tapPrepare();
-    if (tapCtx && tapBuf) tapPlayBuf();
+    if (tapCtx && tapBuf) bufPlay(tapBuf);
   }
   document.addEventListener('pointerdown', tapPrepare, true);
   document.addEventListener('click', playTap, true);
+  /* typing sound in the login box(es) — same throttle as the app */
+  document.addEventListener('input', function (e) {
+    var t = e.target;
+    var ok = t && (t.tagName === 'TEXTAREA' || t.isContentEditable ||
+      (t.tagName === 'INPUT' && ['text', 'search', 'password', 'number', 'email', 'url']
+        .indexOf((t.getAttribute('type') || 'text').toLowerCase()) > -1));
+    if (!ok) return;
+    var now = Date.now();
+    if (now - typeLast < 60) return;
+    typeLast = now;
+    tapPrepare();
+    if (tapCtx && typeBuf) bufPlay(typeBuf);
+  }, true);
 
   /* current public tunnel link (injected by the server when the tunnel is up) */
   var tunnel = window.__TCRS_TUNNEL;

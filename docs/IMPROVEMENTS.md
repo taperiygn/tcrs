@@ -156,6 +156,12 @@ User picked two new features: **3 · Month picker** and **5 · Edit history**. E
 - Runtime colours follow: `themeCol()` emits `calc(L% * var(--theme-b))` lightness so company dots/washes/badges scale too; login.css/login.js follow the stored brightness. The old `--glass-glow` stays a fixed 105% backdrop brightener (defaults unchanged).
 - Verified via CDP real-data run: default bg exactly `rgb(245,235,220)`; bri 130 → bg whites up, ink/chips/rows all lighten (`--theme-b` 1.300); bri 70 → bg deepens to `rgb(214,173,112)`, everything darkens coherently; screenshots confirm both ends look like the same design; zero exceptions/warnings. All four suites green (113 assertions); server tests pass.
 
+**2026-11-12 — Typing sound (type.mp3) DONE**:
+- New `frontend/type.mp3` plays once per real keystroke in any textbox: text/search/password/number/email/url inputs, textareas and contenteditables (grid search, Sheets-link paste, edit-modal fields, login password box — everywhere typing happens).
+- Wired into the existing Web Audio engine on both pages: `type.mp3` is fetched + decoded once alongside `tap.mp3` at first gesture, a buffer source per keystroke, volume follows the Settings sound slider. Non-text inputs (file/range/checkbox) don't trigger it.
+- Throttled to ≥60 ms between plays so held-down keys / autorepeat don't stack into a buzz.
+- Verified via CDP: typing in the grid-search box fetches type.mp3 exactly once and plays per keystroke, range inputs don't fire it, login password box works the same; zero exceptions/warnings. All four suites green (113 assertions); server tests pass.
+
 **2026-11-11 — Tap sound replay fixed (Web Audio)**: the first attempt used `new Audio()` + `cloneNode()` per click with all errors swallowed — playback failed silently in the user's real browser. Rewritten on the Web Audio API: `AudioContext` created and tap.mp3 fetched + decoded once at first `pointerdown` (inside the gesture), each click then starts a `BufferSourceNode` through a 0.4 gain node; `decodeAudioData` uses the callback form for older Safari; every failure path now `console.warn`s instead of vanishing. Verified end-to-end in a real headed Chrome via CDP trusted clicks (context created, 0.576s decoded, source started). Note: Pages caches assets for 10 minutes — a stale cached app.js can also explain a missing sound until refresh.
 
 **2026-11-07 — Colour punch pass DONE** (commit 0b8a9db, live on Pages; user asked for the suggested "more punch"):
