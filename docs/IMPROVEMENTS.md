@@ -124,6 +124,12 @@ User picked two new features: **3 · Month picker** and **5 · Edit history**. E
 - Login page's glass card also lost its blur (static backdrop there too).
 - Verified in real Chrome via CDP: injected + real-data checks (10 rows / 3 days through the actual file inputs) — stuck header shows blur at exactly 64px, un-sticks with blur removed on scroll-up, `body.sliding` set mid-tab-switch and cleared after, card panes compute `none`, zero console warnings; screenshot confirms identical glass look. All four suites green (113 assertions); server tests pass.
 
+**2026-11-12 — Helper texts + floating dock removed DONE**:
+- Removed the on-page helper texts: the schedule view-note ("movements · grouped by date — export/print breaks pages per day", incl. its company-view variant), the "Tap a company to include / exclude…" hint under the company chips, the sub-labels on the SCHWIDE and "Only School 4 movements" checkboxes, and the entire floating stats dock (☰/🚌/🚚 counts + "Click any movement row for a glass detail card").
+- Dock fully retired: creation block + `updateDock()` + its `refreshDerived` call removed, `.ov-dock` CSS rules dropped, selectors cleaned (`body.sliding`, print styles); the now-unused `.explainnext` rule removed too.
+- Movement rows still open the glass detail modal — only the hint telling you so is gone.
+- Verified via CDP real-data run: all six strings/elements confirmed absent from the DOM, screenshot clean, zero console warnings; all four suites green (113 assertions); server tests pass.
+
 **2026-11-11 — Tap sound replay fixed (Web Audio)**: the first attempt used `new Audio()` + `cloneNode()` per click with all errors swallowed — playback failed silently in the user's real browser. Rewritten on the Web Audio API: `AudioContext` created and tap.mp3 fetched + decoded once at first `pointerdown` (inside the gesture), each click then starts a `BufferSourceNode` through a 0.4 gain node; `decodeAudioData` uses the callback form for older Safari; every failure path now `console.warn`s instead of vanishing. Verified end-to-end in a real headed Chrome via CDP trusted clicks (context created, 0.576s decoded, source started). Note: Pages caches assets for 10 minutes — a stale cached app.js can also explain a missing sound until refresh.
 
 **2026-11-07 — Colour punch pass DONE** (commit 0b8a9db, live on Pages; user asked for the suggested "more punch"):

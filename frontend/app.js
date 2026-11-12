@@ -1516,7 +1516,6 @@
     renderMonthBanner(list);
     if (state.tab === 'grid') rerenderSrc();
     updateSavePill();
-    updateDock();
   }
 
   function renderMonthBanner(list) {
@@ -2117,10 +2116,6 @@
     var c = $('content');
     c.innerHTML = '';
 
-    $('view-note').innerHTML = view === 'date'
-      ? '<b>' + entries.length + '</b> movements · grouped by date — export/print breaks pages per day'
-      : '<b>' + entries.length + '</b> movements · grouped by company — cross-coy movements appear under each company';
-
     if (view === 'date') {
       var byDate = {};
       entries.forEach(function (e) {
@@ -2535,16 +2530,6 @@
       clearTimeout(slideT);
       slideT = setTimeout(function () { document.body.classList.remove('sliding'); }, 560);
     }, true);
-
-    /* floating stats dock */
-    if (!document.querySelector('.ov-dock')) {
-      var d = document.createElement('div');
-      d.className = 'ov-dock';
-      d.innerHTML = '<div class="in"><div class="row" id="ov-dock-row"></div>' +
-        '<div class="hint">Click any movement row for a glass detail card</div></div>';
-      document.body.appendChild(d);
-      updateDock();
-    }
   }
 
   /* ------------------------------------------------ sticky head sync -- */
@@ -2606,17 +2591,6 @@
   function closeOverlays() {
     var s = document.querySelector('.ov-scrim'), d = document.querySelector('.ov-dlg');
     if (s) s.remove(); if (d) d.remove();
-  }
-
-  function updateDock() {
-    var row = document.getElementById('ov-dock-row');
-    if (!row) return;
-    var es = filteredEntries(), buses = 0, veh = 0;
-    es.forEach(function (e) { if (e.kind === 'bus') buses += (e.qty || 0); else veh += (e.qty || 0); });
-    row.innerHTML =
-      '<span class="st">☰ ' + es.length + '</span>' +
-      '<span class="st">🚌 ' + buses + '</span>' +
-      '<span class="st">🚚 ' + veh + '</span>';
   }
 
   /* ------------------------------------------------------- tap sound -- */

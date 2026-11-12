@@ -529,8 +529,6 @@ body.rail-collapsed .workspace { min-width: 0; }
 .pilltoggle input:checked ~ .sw { background: var(--pri); opacity: .75; }
 .pilltoggle input:checked ~ .sw::after { left: 13px; }
 
-.explainnext { font-size: 11.5px; color: var(--ink-faint); margin-left: auto; }
-.explainnext b { color: var(--ink-soft); }
 
 /* ------------------------------------------------------- group views */
 .group {
@@ -994,29 +992,6 @@ body::before {
   border: 1px solid rgba(255, 255, 255, .6); background: rgba(255, 255, 255, .45); color: var(--ink);
 }
 .ov-dlg .btn.pri { background: var(--pri); border-color: var(--pri); color: #F4F1EA; }
-/* floating stats dock */
-.ov-dock {
-  position: fixed; right: 22px; bottom: 22px; z-index: 60;
-  border-radius: 18px; isolation: isolate;
-  border: 1px solid rgba(255, 255, 255, .6);
-  box-shadow: 0 14px 34px rgba(46, 32, 22, .24);
-  transition: opacity .4s cubic-bezier(.22, .9, .26, 1), transform .4s cubic-bezier(.22, .9, .26, 1);
-}
-.ov-dock { @starting-style { opacity: 0; transform: translateY(30px); } }
-.ov-dock::before {
-  content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit;
-  background:
-    linear-gradient(118deg, rgba(255, 255, 255, .28), rgba(255, 255, 255, .05) 40%, rgba(255, 255, 255, .16) 60%, rgba(255, 255, 255, .12)),
-    rgba(251, 246, 236, calc(var(--glass-tint) + .04));
-  -webkit-backdrop-filter: blur(14px) saturate(var(--glass-sat)) brightness(var(--glass-glow));
-  backdrop-filter: blur(14px) saturate(var(--glass-sat)) brightness(var(--glass-glow));
-  box-shadow: inset 1.5px 1.5px 1px -.5px rgba(255, 255, 255, .85), inset -1.5px -1.5px 1px -.5px rgba(255, 255, 255, .50);
-}
-.ov-dock .in { padding: 12px 16px; font-size: 12px; font-weight: 650; color: var(--ink); }
-.ov-dock .in .row { display: flex; gap: 12px; align-items: center; }
-.ov-dock .in .st { display: inline-flex; gap: 5px; align-items: center; font-variant-numeric: tabular-nums; }
-.ov-dock .hint { margin-top: 5px; font-size: 10.5px; color: var(--ink-faint); }
-
 /* ------------------------------------- full-width tab slide transitions */
 #panel-schedule, #panel-grid, #icrf-container, #tl-container, #planner-container {
   transition: opacity .48s cubic-bezier(.22, .9, .26, 1), transform .48s cubic-bezier(.22, .9, .26, 1);
@@ -1037,7 +1012,7 @@ body.slide-r2 #planner-container { @starting-style { opacity: 0; transform: tran
 /* perf: during the full-width tab slide, panels translate behind every frosted
    pane — each backdrop-filter would re-render all 0.48s. body.sliding (set by
    app.js for the duration) pauses them; the slide itself hides the swap. */
-body.sliding .topbar::before, body.sliding .chead.stuck::before, body.sliding .ov-dock::before {
+body.sliding .topbar::before, body.sliding .chead.stuck::before {
   -webkit-backdrop-filter: none !important;
   backdrop-filter: none !important;
 }
@@ -1104,7 +1079,7 @@ body.sliding .topbar::before, body.sliding .chead.stuck::before, body.sliding .o
   .layout { display: block; padding: 0; max-width: none; }
   .group, .surface, .card, .inset, .sheet-panel { background: var(--paper) !important; border-color: #bbb; box-shadow: none; }
   .group::before, .surface::before, .card::before, .inset::before, .topbar::before, .sheet-panel::before,
-  .chead::before, .ov-dock, .ov-scrim, .ov-dlg { display: none !important; }
+  .chead::before, .ov-scrim, .ov-dlg { display: none !important; }
   .group { break-inside: avoid; }
   .chead { position: static; background: none; }
   table.mov tbody tr:hover td { background: none; }
