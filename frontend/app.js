@@ -106,6 +106,37 @@
   function storeKey(k) { return 'tcrs:v3:' + schoolPart() + ':' + monthStr(k); }
   function filesKey(k) { return 'tcrs:files:' + schoolPart() + ':' + monthStr(k); }
   function lastKey() { return 'tcrs:last:' + schoolPart() + ':'; }
+  var MONTH_FULL = ['January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'];
+
+  /* every month this school has touched — remote (server memory) merged with
+     local storage, newest first */
+  function listMonths() {
+    var sp = schoolPart() + '-', out = {};
+    var doc = remote.doc && remote.doc.months;
+    if (doc) Object.keys(doc).forEach(function (key) {
+      if (key.indexOf(sp) === 0) out[monthStr(key)] = 1;
+    });
+    try {
+      var keys = [];
+      for (var i = 0; i < localStorage.length; i++) keys.push(localStorage.key(i));
+      var re = new RegExp('^tcrs:v3:' + schoolPart() + ':(\\d{1,2})-(\\d{4})$');
+      keys.forEach(function (key) {
+        var m = re.exec(key);
+        if (m) out[m[1] + '-' + m[2]] = 1;
+      });
+    } catch (e) { }
+    var last = lsGet(lastKey());
+    if (last && last.indexOf(sp) === 0) out[monthStr(last)] = 1;
+    return Object.keys(out).sort(function (a, b) {
+      var pa = a.split('-'), pb = b.split('-');
+      return (+pb[1] - +pa[1]) || (+pb[0] - +pa[0]);
+    });
+  }
+  function monthLabel(k) {
+    var p = monthStr(k).split('-');
+    return (MONTH_FULL[(+p[0]) - 1] || '?') + ' ' + p[1];
+  }
 
   /* one-time rename: the original keys ('tcrs:v3:11-2026', month NUMBER not name)
      belonged to School 4; rewrite them to the school-prefixed form */
@@ -1516,6 +1547,7 @@
     renderMonthBanner(list);
     if (state.tab === 'grid') rerenderSrc();
     updateSavePill();
+    syncMonthBtn();
   }
 
   function renderMonthBanner(list) {
@@ -2765,6 +2797,7 @@
   })();
   init();
   initSchoolMenu();
+  initMonthMenu();
   initOverlays();
   initTapSound();
   initSettings();
@@ -2827,6 +2860,107 @@
     await restoreWorkspace();
   }
 
+  /* Each month is its own workspace (its own key on the server): park the
+     current one, blank the screen, then reopen the chosen month's files and
+     edits — or, for a month never used, leave a fresh empty template. */
+  async function setMonth(k) {
+    k = monthStr(k);
+    var cur = state.model ? monthKey() : lsGet(lastKey());
+    if (cur && monthStr(cur) === k && state.model) return;
+    flushSave();
+    clearTimeout(saveTimer);
+    savePending = false;
+
+    state.icrfWb = null; state.tlWb = null; state.icrfName = ''; state.tlName = '';
+    state.files = { icrf: null, tl: null };
+    state.icrfGrid = null; state.tlGrid = null;
+    state.restoredAt = null; state.touched = false; state.scheduleStale = false;
+    remote.filesDirty = remote.localFilesDirty = false;
+    state.coys = {}; state.schwide = true; state.onlyS4 = true; state.poc = true;
+    ['icrf', 'tl'].forEach(function (which) {
+      $('file-' + which).value = '';
+      var box = $(which + '-status');
+      box.hidden = true; box.innerHTML = '';
+      $('up-' + which).classList.remove('done');
+    });
+    lsSet(lastKey(), schoolPart() + '-' + k);
+    maybeCombine();               // no files → clears the results and shows the empty state
+    syncControls();
+    syncMonthBtn();
+    await restoreWorkspace(k);
+    syncMonthBtn();
+  }
+
+  /* ------------------------------------------------------ month menu -- */
+  function currentMonthKey() {
+    if (state.model) return monthKey();
+    var last = lsGet(lastKey());
+    return (last && last.indexOf(schoolPart() + '-') === 0) ? monthStr(last) : null;
+  }
+  function syncMonthBtn() {
+    var mo = $('month-cur-mo'), yr = $('month-cur-yr');
+    if (!mo || !yr) return;
+    var k = currentMonthKey(), p = k ? monthStr(k).split('-') : null;
+    mo.textContent = p ? (MONTH_FULL[(+p[0]) - 1] || '?').slice(0, 3).toUpperCase() : '＋';
+    yr.textContent = p ? p[1] : 'new';
+  }
+  function renderMonthMenu() {
+    var menu = $('month-menu');
+    if (!menu) return;
+    var cur = currentMonthKey();
+    var html = listMonths().map(function (k) {
+      var p = monthStr(k).split('-');
+      return '<button type="button" role="menuitem" data-mk="' + esc(k) + '"' +
+        (cur === k ? ' class="on"' : '') + '><span class="sm-mark">' +
+        esc((MONTH_FULL[(+p[0]) - 1] || '?').slice(0, 1)) + '</span><span>' +
+        esc(monthLabel(k)) + '<span class="sm-sub">School ' + state.school + ' · ' +
+        esc(p[1]) + '</span></span></button>';
+    }).join('');
+    var y0 = new Date().getFullYear();
+    var years = []; for (var y = y0 - 1; y <= y0 + 3; y++) years.push(y);
+    var selY = cur ? (+monthStr(cur).split('-')[1]) : y0;
+    if (years.indexOf(selY) === -1) selY = y0;
+    var selM = 0;
+    if (cur) { selM = (+monthStr(cur).split('-')[0]) % 12; }   // default: month after the current one
+    html += '<div class="mm-new"><select id="mm-m">' +
+      MONTH_FULL.map(function (n, i) {
+        return '<option value="' + (i + 1) + '"' + (selM === i ? ' selected' : '') + '>' + n.toUpperCase() + '</option>';
+      }).join('') +
+      '</select><select id="mm-y">' + years.map(function (y) {
+        return '<option' + (selY === y ? ' selected' : '') + '>' + y + '</option>';
+      }).join('') + '</select><button type="button" id="mm-start" title="Open this month as a fresh template">Start</button></div>';
+    menu.innerHTML = html;
+  }
+  function initMonthMenu() {
+    var btn = $('month-btn'), menu = $('month-menu');
+    if (!btn || !menu) return;
+    function close() { menu.hidden = true; btn.setAttribute('aria-expanded', 'false'); }
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var open = menu.hidden;
+      menu.hidden = !open;
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      if (open) renderMonthMenu();
+    });
+    menu.addEventListener('click', function (e) {
+      var b = e.target.closest && (e.target.closest('button[data-mk]') || e.target.closest('#mm-start'));
+      if (!b) return;
+      e.stopPropagation();
+      var k;
+      if (b.id === 'mm-start') {
+        k = schoolPart() + '-' + $('mm-m').value + '-' + $('mm-y').value;
+      } else {
+        k = b.dataset.mk;
+      }
+      close();
+      setMonth(k);
+    });
+    document.addEventListener('click', function (e) {
+      if (!menu.hidden && !(e.target.closest && e.target.closest('.month-switch'))) close();
+    });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
+  }
+
   function initSchoolMenu() {
     var btn = $('school-btn'), menu = $('school-menu');
     menu.innerHTML = T.SCHOOLS.map(function (x) {
@@ -2869,24 +3003,32 @@
     await restoreWorkspace();
   }
 
-  /* reopen whatever this school's profile had open last */
-  async function restoreWorkspace() {
+  /* reopen whatever this school's profile had open last — or, with forceKey,
+     one specific month (its own files + edits, server memory first) */
+  async function restoreWorkspace(forceKey) {
     var rl = null, ll = null, sp = 's' + state.school + '-';
-    if (remote.doc && remote.doc.last) {
-      // only months that belong to this school's profile
-      if (remote.doc.last.indexOf(sp) === 0) rl = remote.doc.last;
-      else Object.keys(remote.doc.months || {}).forEach(function (k) {
-        if (rl === null && k.indexOf(sp) === 0) rl = k;
-      });
+    var key, rRec;
+    if (forceKey) {
+      key = monthStr(forceKey);
+      rRec = (remote.doc && remote.doc.months && remote.doc.months[key]) || null;
+    } else {
+      if (remote.doc && remote.doc.last) {
+        // only months that belong to this school's profile
+        if (remote.doc.last.indexOf(sp) === 0) rl = remote.doc.last;
+        else Object.keys(remote.doc.months || {}).forEach(function (k) {
+          if (rl === null && k.indexOf(sp) === 0) rl = k;
+        });
+      }
+      ll = lsGet(lastKey());
+      if (ll && ll.indexOf(sp) !== 0) ll = null;
+      var lRec = ll && readLocal(ll);
+      var ru = rRec ? ((rRec.edits && rRec.edits.updatedAt) || rRec.savedAt || '') : '';
+      key = (ll && lRec && String(lRec.updatedAt || '') > ru) ? ll : (rl || ll);
+      if (!key) return;
+      rRec = rl && key === rl && remote.doc.months[rl];
     }
-    ll = lsGet(lastKey());
-    if (ll && ll.indexOf(sp) !== 0) ll = null;
-    var rRec = rl && remote.doc.months[rl], lRec = ll && readLocal(ll);
-    var ru = rRec ? ((rRec.edits && rRec.edits.updatedAt) || rRec.savedAt || '') : '';
-    var key = (ll && lRec && String(lRec.updatedAt || '') > ru) ? ll : (rl || ll);
-    if (!key) return;
 
-    var files = rRec && key === rl && rRec.files, fromLocal = false;
+    var files = rRec && rRec.files, fromLocal = false;
     if (!files || !(files.icrf || files.tl)) {
       try { files = JSON.parse(lsGet(filesKey(key)) || 'null'); fromLocal = true; } catch (e) { files = null; }
     }
@@ -2923,6 +3065,7 @@
     state: state,
     maybeCombine: maybeCombine,
     setSchool: setSchool,
+    setMonth: setMonth, listMonths: listMonths,
     exportXlsx: exportXlsx,
     drawView: drawView,
     filteredEntries: filteredEntries,

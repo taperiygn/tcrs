@@ -50,8 +50,12 @@
           <div class="sp-note">lofi loop · music starts after your next click (browser autoplay rule)</div>
         </div>
       </div>
-      <div>
-        <div class="t1">School <span class="sn">4</span> · Movement Builder</div>
+      <div class="month-switch">
+        <button type="button" class="monthbtn" id="month-btn" aria-haspopup="true" aria-expanded="false" title="Switch month or start a fresh one">
+          <span class="m-mo" id="month-cur-mo">＋</span><span class="m-yr" id="month-cur-yr">new</span>
+          <svg class="m-caret" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z"/></svg>
+        </button>
+        <div class="month-menu" id="month-menu" role="menu" hidden></div>
       </div>
     </div>
 
