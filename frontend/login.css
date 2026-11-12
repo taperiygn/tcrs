@@ -1,4 +1,5 @@
 * { box-sizing: border-box; }
+:root { --theme-h: 14; }   /* theme hue — follows the app's Settings slider (login.js applies it) */
 html, body { margin: 0; height: 100%; }
 body {
   font-family: -apple-system, BlinkMacSystemFont, system-ui, "Segoe UI", Helvetica, Arial, sans-serif;
@@ -10,7 +11,7 @@ body {
 body::before {
   content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
   background:
-    radial-gradient(560px at 12% 18%, rgba(140, 61, 38, .22), transparent 70%),
+    radial-gradient(560px at 12% 18%, hsla(var(--theme-h), 57%, 35%, .22), transparent 70%),
     radial-gradient(520px at 88% 12%, rgba(61, 110, 82, .18), transparent 70%),
     radial-gradient(680px at 74% 88%, rgba(125, 94, 12, .17), transparent 70%),
     radial-gradient(420px at 30% 80%, rgba(56, 102, 111, .16), transparent 70%);
@@ -35,9 +36,9 @@ body::before {
 }
 .mark {
   width: 52px; height: 52px; border-radius: 16px; margin: 0 auto 16px;
-  background: #8C3D26; color: #F4F1EA; font-weight: 800; font-size: 17px;
+  background: hsl(var(--theme-h), 57%, 35%); color: #F4F1EA; font-weight: 800; font-size: 17px;
   display: grid; place-items: center;
-  box-shadow: 0 6px 16px rgba(110, 47, 28, .30);
+  box-shadow: 0 6px 16px hsla(var(--theme-h), 59%, 27%, .30);
 }
 h1 { font-size: 20px; margin: 0 0 6px; letter-spacing: -0.02em; }
 .sub { margin: 0 0 22px; color: #6A5544; font-size: 14px; }
@@ -47,15 +48,15 @@ input[type=password] {
   width: 100%; font: inherit; font-size: 15px; padding: 11px 14px; color: inherit;
   border: 1px solid #B99F82; border-radius: 11px; outline: none; background: #FBF6EC;
 }
-input[type=password]:focus { border-color: #8C3D26; box-shadow: 0 0 0 3px rgba(140, 61, 38, .22); background: #FBF6EC; }
+input[type=password]:focus { border-color: hsl(var(--theme-h), 57%, 35%); box-shadow: 0 0 0 3px hsla(var(--theme-h), 57%, 35%, .22); background: #FBF6EC; }
 .msg { min-height: 20px; margin: 10px 0 4px; font-size: 13px; color: #8C2F12; }
 button {
   width: 100%; font: inherit; font-weight: 650; font-size: 14px; padding: 11px; cursor: pointer;
-  border: none; border-radius: 11px; background: #8C3D26; color: #F4F1EA; transition: background .15s;
+  border: none; border-radius: 11px; background: hsl(var(--theme-h), 57%, 35%); color: #F4F1EA; transition: background .15s;
 }
-button:hover:not(:disabled) { background: #6E2F1C; }
+button:hover:not(:disabled) { background: hsl(var(--theme-h), 59%, 27%); }
 button:disabled { opacity: .6; cursor: wait; }
-button:focus-visible { outline: 2px solid #8C3D26; outline-offset: 2px; }
+button:focus-visible { outline: 2px solid hsl(var(--theme-h), 57%, 35%); outline-offset: 2px; }
 .tunnel { margin: 22px 0 0; text-align: left; }
 .t-label { font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #A28C77; margin-bottom: 7px; }
 .t-url {

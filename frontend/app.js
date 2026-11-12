@@ -2672,7 +2672,7 @@
 
   /* -------------------------------------------------------- settings -- */
   /* glass look + audio preferences, stored app-wide (not per school) */
-  var PREF_DEFAULTS = { tint: 22, sat: 215, glow: 105, vol: 40, music: false };
+  var PREF_DEFAULTS = { tint: 22, sat: 215, glow: 105, vol: 40, music: false, hue: 14 };
   var prefs = null, musicAudio = null, musicWaiting = false;
 
   function loadPrefs() {
@@ -2692,6 +2692,7 @@
   }
   function applyGlassPrefs() {
     var r = document.documentElement.style;
+    r.setProperty('--theme-h', String(prefs.hue));
     r.setProperty('--glass-tint', (prefs.tint / 100).toFixed(3));
     r.setProperty('--glass-sat', prefs.sat + '%');
     r.setProperty('--glass-glow', prefs.glow + '%');
@@ -2737,6 +2738,7 @@
       var lbl = $(id + '-v');
       if (lbl) lbl.textContent = label;
     };
+    set('set-hue', prefs.hue, prefs.hue + '°');
     set('set-tint', prefs.tint, prefs.tint + '%');
     set('set-refract', prefs.sat, prefs.sat + '%');
     set('set-bright', prefs.glow, prefs.glow + '%');
@@ -2765,14 +2767,15 @@
     });
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
 
-    var bindRange = function (id, key, apply) {
+    var bindRange = function (id, key, apply, suffix) {
       $(id).addEventListener('input', function () {
         prefs[key] = parseInt(this.value, 10);
-        $(id + '-v').textContent = prefs[key] + '%';
+        $(id + '-v').textContent = prefs[key] + (suffix || '%');
         apply();
         savePrefs();
       });
     };
+    bindRange('set-hue', 'hue', applyGlassPrefs, '°');
     bindRange('set-tint', 'tint', applyGlassPrefs);
     bindRange('set-refract', 'sat', applyGlassPrefs);
     bindRange('set-bright', 'glow', applyGlassPrefs);

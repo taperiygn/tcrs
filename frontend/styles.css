@@ -9,9 +9,10 @@
   /* the palette — Terra Deep */
   --bg: #F5EBDC;                        /* base — warm sand page           */
   --surface: #E0CDB4;                   /* surface — clay card tint (glass shows through) */
-  --pri: #8C3D26;                       /* primary — deep rust             */
-  --pri-strong: #6E2F1C;                /* primary pressed / deep text     */
-  --pri-soft: #EFDCD1;                  /* primary tint                    */
+  --theme-h: 14;                        /* theme hue — driven by the Settings colour slider */
+  --pri: hsl(var(--theme-h), 57%, 35%); /* primary — deep rust at hue 14     */
+  --pri-strong: hsl(var(--theme-h), 59%, 27%);  /* primary pressed / deep text */
+  --pri-soft: hsl(var(--theme-h), 48%, 88%);    /* primary tint                */
   --pri-deep: #D9B7A5;                  /* primary border/selection tint   */
   --paper: #FBF6EC;                     /* inputs, menus, cells on a card  */
   --accent: #3E6E52;                    /* accent — forest green (rails, hovers) */
@@ -102,7 +103,7 @@ body {
   border: 0; cursor: pointer; font-family: inherit;
   transition: transform .15s ease, box-shadow .15s ease;
 }
-.brand .mark:hover, .brand .mark[aria-expanded="true"] { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(110, 47, 28, .28); }
+.brand .mark:hover, .brand .mark[aria-expanded="true"] { transform: translateY(-1px); box-shadow: 0 4px 12px hsla(var(--theme-h), 59%, 27%, .28); }
 .school-switch { position: relative; }
 .school-menu {
   position: absolute; top: 46px; left: 0; z-index: 60; min-width: 210px;
@@ -590,7 +591,7 @@ body.rail-collapsed .workspace { min-width: 0; }
 .chead {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
   padding: 11px 17px;
-  background: linear-gradient(90deg, rgba(140, 61, 38, .38), rgba(140, 61, 38, .14));
+  background: linear-gradient(90deg, hsla(var(--theme-h), 57%, 35%, .38), hsla(var(--theme-h), 57%, 35%, .14));
   border-radius: var(--radius) var(--radius) 0 0;
   border-bottom: 1px solid var(--line);
   position: sticky; top: var(--topbar-h); z-index: 5;
@@ -750,7 +751,7 @@ table.mov .datecell .dow { color: var(--pri); font-weight: 700; margin-left: 6px
 .sheet-input {
   width: 100%; min-width: 68px; max-width: 320px;
   border: none; outline: none; background: var(--paper);
-  box-shadow: 0 0 0 2px var(--pri), 0 4px 14px rgba(110, 47, 28, .16);
+  box-shadow: 0 0 0 2px var(--pri), 0 4px 14px hsla(var(--theme-h), 59%, 27%, .16);
   border-radius: 7px;
   font: inherit; font-size: 12.5px; color: var(--ink);
   padding: 4px 8px; margin: -6px 0 -6px -4px;
@@ -925,7 +926,7 @@ body::before {
      backdrop-filter (their backdrop is just these static pools), so the
      pools themselves carry the extra colour */
   background:
-    radial-gradient(560px at 12% 18%, rgba(140, 61, 38, .26), transparent 70%),
+    radial-gradient(560px at 12% 18%, hsla(var(--theme-h), 57%, 35%, .26), transparent 70%),
     radial-gradient(520px at 88% 12%, rgba(61, 110, 82, .22), transparent 70%),
     radial-gradient(680px at 74% 88%, rgba(125, 94, 12, .21), transparent 70%),
     radial-gradient(420px at 30% 80%, rgba(56, 102, 111, .19), transparent 70%);
@@ -1072,7 +1073,7 @@ body.sliding .topbar::before, body.sliding .chead.stuck::before {
   background: var(--pri); color: #F4F1EA;
   display: grid; place-items: center;
   border: 0; cursor: pointer; font-family: inherit;
-  box-shadow: 0 4px 12px rgba(110, 47, 28, .24);
+  box-shadow: 0 4px 12px hsla(var(--theme-h), 59%, 27%, .24);
 }
 .setbtn svg { width: 19px; height: 19px; fill: currentColor; }
 .setbtn[aria-expanded="true"] { background: var(--pri-strong); }
@@ -1102,6 +1103,18 @@ body.sliding .topbar::before, body.sliding .chead.stuck::before {
 .sp-row .sp-k { font-size: 12px; font-weight: 650; color: var(--ink-soft); }
 .sp-row .sp-v { font-family: var(--mono); font-size: 11px; font-weight: 700; color: var(--ink); text-align: right; font-variant-numeric: tabular-nums; }
 .sp-row input[type="range"] { width: 100%; accent-color: var(--pri); cursor: pointer; height: 20px; }
+.sp-row input[type="range"].sp-hue {
+  appearance: none; -webkit-appearance: none;
+  height: 12px; border-radius: 999px;
+  background: linear-gradient(90deg, hsl(0, 70%, 45%), hsl(60, 70%, 45%), hsl(120, 70%, 40%), hsl(180, 70%, 40%), hsl(240, 70%, 50%), hsl(300, 70%, 45%), hsl(360, 70%, 45%));
+  border: 1px solid rgba(56, 40, 28, .18);
+}
+.sp-row input[type="range"].sp-hue::-webkit-slider-thumb {
+  appearance: none; -webkit-appearance: none;
+  width: 16px; height: 16px; border-radius: 50%;
+  background: hsl(var(--theme-h), 57%, 35%);
+  border: 2px solid #F4F1EA; box-shadow: 0 1px 4px rgba(46, 32, 22, .35);
+}
 .sp-musicrow {
   grid-template-columns: 108px 1fr;
   border-top: 1px solid rgba(122, 95, 74, .18);
