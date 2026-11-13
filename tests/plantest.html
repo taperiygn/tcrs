@@ -397,6 +397,112 @@
     failures++;
     out.push('CRASH(D) ' + (e && e.stack || e));
   }
+
+  /* ---------- part E: a pre-fix saved workspace heals on reopen ---------- */
+  try {
+    /* simulate the user's December workspace saved before the date fix:
+       every Troop Lift entry lost its date and the live lines lost their
+       date headings — then the month is reopened */
+    var bad = [];
+    A.state.entries.forEach(function (e) {
+      var c = JSON.parse(JSON.stringify(e));
+      if (e.source === 'TROOPLIFT') { delete c.date; delete c.eDate; }
+      bad.push(c);
+    });
+    var badLines = A.state.tlLines.filter(function (l) { return l.kind !== 'date'; });
+    badLines.forEach(function (l) { if (l.date) l.date = 'NaN-NaN-NaN'; });
+    localStorage.setItem('tcrs:v3:s4:12-2026', JSON.stringify({
+      v: 3, updatedAt: 'z', entries: bad, tlLines: badLines,
+      skipped: [], history: [], busPlan: {}
+    }));
+    A.maybeCombine();
+    var healedE = A.state.entries.filter(function (e) { return e.source === 'TROOPLIFT'; });
+    ok('saved date-less TL entries are repaired on reopen', healedE.length >= 3 &&
+      healedE.every(function (e) { return /^\d{4}-\d{2}-\d{2}$/.test(e.date || ''); }),
+      JSON.stringify(healedE.map(function (e) { return [e.id, e.date]; })));
+    var headsE = A.state.tlLines.filter(function (l) { return l.kind === 'date'; }).length;
+    ok('date headings are re-inserted into the live lines', headsE >= 2, headsE);
+    var planDaysE = Object.keys((function () {   // planner sees the healed days
+      var d = {};
+      A.state.entries.forEach(function (e) {
+        if (e.kind !== 'bus' || !/^\d{4}-\d{2}-\d{2}$/.test(e.date || '')) return;
+        d[e.date] = 1;
+      });
+      return d;
+    })());
+    ok('the bus planner finds trips again (2 days)', planDaysE.length === 2,
+      planDaysE.join(','));
+    A.flushSave(true);
+    var persist = JSON.parse(localStorage.getItem('tcrs:v3:s4:12-2026') || 'null');
+    var pTl = (persist && persist.entries || []).filter(function (e) { return e.source === 'TROOPLIFT'; });
+    ok('the healed data is persisted', !!persist && pTl.length >= 3 &&
+      pTl.every(function (e) { return /^\d{4}-\d{2}-\d{2}$/.test(e.date || ''); }),
+      pTl.length);
+    localStorage.clear();
+  } catch (e) {
+    failures++;
+    out.push('CRASH(E) ' + (e && e.stack || e));
+  }
+
+  /* ---------- part F: a newly added TL workbook syncs the lines ---------- */
+  try {
+    function buildColTlF(extraRow) {
+      var wb = new ExcelJS.Workbook();
+      var ws = wb.addWorksheet('DEC 26 TL');
+      ws.getRow(1).getCell(11).value = 'DECEMBER-2026';
+      ws.getRow(3).values = [, 'DATE', 'DAY', 'DAY OF WEEK', 'TIME', 'TIME GAP (H:MM)', 'COY/UNIT', 'PURPOSE', 'PICK-UP POINT TO DROP-OFF POINT', 'NO. OF BUSES', 'REMARKS'];
+      ws.getRow(4).values = [, { formula: 'B4&"-"&$K$1', result: NaN }, 1, 'Tuesday', '0630', , '1ST', 'COMD VETT', 'RHC - MTL', 4, '4x 5-TON'];
+      ws.getRow(5).values = [, { formula: 'B5&"-"&$K$1', result: NaN }, 2, 'Wednesday', '1700', , '5TH', 'GX II', 'MTL - RHC', 2, ''];
+      if (extraRow) ws.getRow(6).values = [, { formula: 'B6&"-"&$K$1', result: NaN }, 2, 'Wednesday', '0800', , '2ND', 'GX RTU', 'MTL - RHC', 3, ''];
+      return wb;
+    }
+    async function toFileF(wb, name) { return new File([await wb.xlsx.writeBuffer()], name); }
+
+    /* saved workspace holding a stale TL row (user edited days ago) */
+    var curE = A.state.entries.slice();
+    var nIcrf = curE.filter(function (e) { return e.source !== 'TROOPLIFT'; }).length;
+    var stale = JSON.parse(JSON.stringify(curE.filter(function (e) { return e.source === 'TROOPLIFT'; })[0]));
+    stale.id = 't999'; stale.timeStart = '0559'; stale.rawText = '0559 OLD - OLD BUSES (1ST STALE)';
+    delete stale.date;
+    localStorage.setItem('tcrs:v3:s4:12-2026', JSON.stringify({
+      v: 3, updatedAt: 'z', entries: curE.concat([stale]),
+      tlLines: A.state.tlLines, skipped: [], history: [], busPlan: {}
+    }));
+
+    /* add a *changed* TL workbook — an extra movement — the lines must
+       sync with it: the new row appears, the stale row is gone */
+    await A.handleFile(await toFileF(buildColTlF(true), 'DEC 26 TL v2.xlsx'), 'tl');
+    var tlF = A.state.entries.filter(function (e) { return e.source === 'TROOPLIFT'; });
+    ok('a changed TL workbook syncs: new row in, stale row out', tlF.length === 4 &&
+      tlF.some(function (e) { return e.timeStart === '0800' && e.coys[0] === '2ND'; }) &&
+      !tlF.some(function (e) { return e.timeStart === '0559'; }),
+      JSON.stringify(tlF.map(function (e) { return [e.timeStart, e.coys[0]]; })));
+    ok('all synced TL trips are dated',
+      tlF.every(function (e) { return /^\d{4}-\d{2}-\d{2}$/.test(e.date || ''); }));
+    ok('ICRF rows survive the TL sync',
+      A.state.entries.filter(function (e) { return e.source !== 'TROOPLIFT'; }).length === nIcrf,
+      nIcrf);
+    ok('live lines carry the workbook date headings after sync',
+      A.state.tlLines.filter(function (l) { return l.kind === 'date'; }).length >= 2);
+
+    /* an identical re-drop must NOT clobber user edits: save an edit,
+       re-drop the same file, the edit stays. One buffer reused — a fresh
+       writeBuffer would differ (ExcelJS stamps a creation timestamp). */
+    A.flushSave(true);
+    var e0 = A.state.entries.filter(function (e) { return e.source === 'TROOPLIFT'; })[0];
+    e0.timeStart = '1123'; e0.edited = true;
+    A.saveStore(true); A.flushSave(true);
+    var sameBuf = await buildColTlF(true).xlsx.writeBuffer();
+    await A.handleFile(new File([sameBuf], 'DEC 26 TL v2.xlsx'), 'tl');
+    var e0b = A.state.entries.filter(function (e) { return e.source === 'TROOPLIFT' && e.id === e0.id; })[0] ||
+      A.state.entries.filter(function (e) { return e.source === 'TROOPLIFT'; })[0];
+    ok('an identical re-drop keeps the saved lines (edits win)', e0b.timeStart === '1123',
+      e0b.timeStart);
+    localStorage.clear();
+  } catch (e) {
+    failures++;
+    out.push('CRASH(F) ' + (e && e.stack || e));
+  }
   log();
   document.title = failures ? 'PLAN FAILED' : 'PLAN OK';
 })();

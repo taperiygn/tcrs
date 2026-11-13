@@ -34,6 +34,7 @@
     poc: true,
     touched: false,         // true once there is anything worth keeping beyond the parsed files
     files: { icrf: null, tl: null },   // {name, b64} — kept so the workspace reopens without re-uploading
+    _tlFresh: false,        // the TL workbook was just added/replaced — lines sync with it at the next combine
     icrfGrid: null, tlGrid: null
   };
 
@@ -283,7 +284,14 @@
     return bytes.buffer;
   }
   function rememberFile(which, name, buf, extra) {
-    state.files[which] = { name: name, b64: bufToB64(buf) };
+    var b64 = bufToB64(buf);
+    if (which === 'tl') {
+      var prev = state.files.tl;
+      /* a new or replaced Troop Lift workbook — the live TL lines must
+         sync with it at the next combine (an identical re-drop doesn't) */
+      state._tlFresh = !(prev && prev.b64 === b64);
+    }
+    state.files[which] = { name: name, b64: b64 };
     if (extra) { state.files[which].gs = extra.gs; state.files[which].gsAt = extra.gsAt; }
     remote.filesDirty = true;
     remote.localFilesDirty = true;
@@ -1028,8 +1036,20 @@
     var saved = loadStore();
     applyOpts(saved && saved.opts);
     var hadEdits = !!(saved && saved.hasEdits);
+    var tlSynced = false;           // TL lines were re-synced from a just-added workbook
     state.touched = hadEdits;
-    if (hadEdits) {
+    if (hadEdits && state._tlFresh) {
+      /* the Troop Lift workbook was just added or replaced — the workbook
+         is the truth for the TL side and the live lines sync with the
+         fresh parse; saved ICRF edits, history and planner drafts stay */
+      state.entries = saved.entries.filter(function (e) { return e.source !== 'TROOPLIFT'; })
+        .concat(model.entries.filter(function (e) { return e.source === 'TROOPLIFT'; }));
+      state.tlLines = JSON.parse(JSON.stringify(model.tlLines));
+      state.skipped = Array.isArray(saved.skipped)
+        ? saved.skipped : JSON.parse(JSON.stringify(model.icrfSkipped));
+      state.restoredAt = saved.updatedAt || null;
+      tlSynced = true;
+    } else if (hadEdits) {
       state.entries = saved.entries;
       state.tlLines = Array.isArray(saved.tlLines) && saved.tlLines.length
         ? saved.tlLines : JSON.parse(JSON.stringify(model.tlLines));
@@ -1046,6 +1066,62 @@
     state.busPlan = (saved && saved.busPlan && typeof saved.busPlan === 'object' && !Array.isArray(saved.busPlan)) ? saved.busPlan : {};
     state.planOrder = {}; state.planTimes = {}; state.planAuto = {};
     state.planDirty = {}; state.planDragId = null;
+
+    /* auto-repair: workspaces saved before the columnar-TL date fix hold
+       date-less Troop Lift entries (the old parser emitted no date headings),
+       which leaves the planner empty. The fresh `model` was just parsed with
+       the fixed parser and has correct dates — patch the saved copy from it,
+       matching by id first, then rawText, then time/route/type. */
+    var healed = (function healTLDates() {
+      var DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+      var bad = state.entries.filter(function (e) {
+        return e.source === 'TROOPLIFT' && !DATE_RE.test(e.date || '');
+      });
+      if (!bad.length) return false;
+      var fresh = model.entries.filter(function (e) {
+        return e.source === 'TROOPLIFT' && DATE_RE.test(e.date || '');
+      });
+      if (!fresh.length) return false;
+      var byId = {}, byRaw = {}, bySig = {};
+      fresh.forEach(function (e) {
+        if (!byId[e.id]) byId[e.id] = e;
+        if (e.rawText && !byRaw[e.rawText]) byRaw[e.rawText] = e;
+        var sig = [e.timeStart, e.from, e.to, e.vehicleType, e.qty || '', (e.coys || []).join('/')].join('|');
+        if (!bySig[sig]) bySig[sig] = e;
+      });
+      var fixed = 0;
+      bad.forEach(function (e) {
+        var f = byId[e.id] || (e.rawText && byRaw[e.rawText]) ||
+          bySig[[e.timeStart, e.from, e.to, e.vehicleType, e.qty || '', (e.coys || []).join('/')].join('|')];
+        if (!f) return;
+        e.date = f.date;
+        if ('eDate' in e || f.date) e.eDate = f.date;
+        fixed++;
+      });
+      /* the live-sheet text block needs date headings too: if the saved
+         lines have none, interleave one before the first line of each day
+         (each line's date comes from its entry) */
+      var hasHead = state.tlLines.some(function (l) { return l.kind === 'date'; });
+      if (!hasHead) {
+        var ent = {};
+        state.entries.forEach(function (e) { ent[e.id] = e; });
+        var out = [], cur = null;
+        state.tlLines.forEach(function (l) {
+          var d = (l.entryId && ent[l.entryId] && ent[l.entryId].date) || null;
+          if (d && DATE_RE.test(d)) {
+            l.date = d;                        // re-stamp the line's own date
+            if (d !== cur) {
+              cur = d;
+              var p = d.split('-');
+              out.push({ row: l.row, kind: 'date', date: d, text: (+p[2]) + '/' + (+p[1]), id: 'd' + l.row });
+            }
+          }
+          out.push(l);
+        });
+        if (out.length > state.tlLines.length) state.tlLines = out;
+      }
+      return fixed > 0;
+    })();
 
     // companies added by manual rows in an earlier session
     state.entries.forEach(function (e) {
@@ -1089,12 +1165,14 @@
     sync = { kind: '', text: '' };
     updateSavePill();
     renderPlanner();
-    if (!saved || !saved._remote || remote.filesDirty || remote.localFilesDirty ||
+    if (healed || tlSynced || !saved || !saved._remote || remote.filesDirty || remote.localFilesDirty ||
         remote.revs[monthKey()] === undefined) saveStore(true);
 
     var s = statsFor(filteredEntries());
     toast('<b>Combined.</b> ' + s.movements + ' movements over ' + s.days + ' days.' +
       (prunedRows ? ' <span class="sub">' + prunedRows + ' past-dated row' + (prunedRows === 1 ? '' : 's') + ' auto-removed by sweep.</span>' : '') +
+      (healed ? ' <span class="sub">Dates on Troop Lift trips were repaired from the workbook.</span>' : '') +
+      (tlSynced ? ' <span class="sub">Troop Lift lines synced with the workbook.</span>' : '') +
       (hadEdits ? ' Your previous edits were restored.' : ''));
   }
 
@@ -3259,6 +3337,7 @@
       if (!fromLocal) lsSet(filesKey(key), JSON.stringify(state.files));
       state._gsCsv = null;          // rebuild the sync baseline from the sheet on first self-check
       renderGsRow();
+      state._tlFresh = false;       // restores always keep the saved lines
       maybeCombine();
     } catch (err) {
       console.error(err);
